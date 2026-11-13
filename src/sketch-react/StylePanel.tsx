@@ -74,12 +74,26 @@ function Section({ children }: { children: ReactNode }) {
   return <section className="sk-sec">{children}</section>;
 }
 
-function Field({ label, aside, children }: { label: string; aside?: ReactNode; children: ReactNode }) {
+function Field({
+  label,
+  aside,
+  value,
+  half,
+  children,
+}: {
+  label: string;
+  aside?: ReactNode;
+  /** Başlığın sağında gösterilen seçili değer */
+  value?: string;
+  /** Yarım genişlik: yan yana iki alan */
+  half?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <div className="sk-field">
+    <div className={`sk-field${half ? ' is-half' : ''}`}>
       <div className="sk-field-head">
         <span>{label}</span>
-        {aside}
+        {aside ?? (value && <span className="sk-field-value">{value}</span>)}
       </div>
       {children}
     </div>
@@ -207,11 +221,14 @@ export default function StylePanel({ editor }: { editor: Editor }) {
     >
       {!onlyImages && (
         <Section>
-          <Field label={t('style.stroke')}>
+          <Field label={t('style.stroke')} value={v.strokeColor.toUpperCase()}>
             <Swatches colors={STROKE_COLORS} value={v.strokeColor} onChange={(c) => set({ strokeColor: c })} label={t('style.stroke')} />
           </Field>
           {hasShape && (
-            <Field label={t('style.background')}>
+            <Field
+              label={t('style.background')}
+              value={v.backgroundColor === 'transparent' ? t('style.noFill') : v.backgroundColor.toUpperCase()}
+            >
               <Swatches
                 colors={BACKGROUND_COLORS}
                 value={v.backgroundColor}
@@ -221,7 +238,10 @@ export default function StylePanel({ editor }: { editor: Editor }) {
             </Field>
           )}
           {hasShape && v.backgroundColor !== 'transparent' && (
-            <Field label={t('style.fill')}>
+            <Field
+              label={t('style.fill')}
+              value={t(v.fillStyle === 'hachure' ? 'style.hachure' : v.fillStyle === 'cross' ? 'style.cross' : 'style.solid')}
+            >
               <Seg
                 label={t('style.fill')}
                 value={v.fillStyle}
@@ -265,7 +285,7 @@ export default function StylePanel({ editor }: { editor: Editor }) {
 
       {hasLines && (
         <Section>
-          <Field label={t('style.width')}>
+          <Field label={t('style.width')} half={has(...SHAPES, 'line', 'arrow')}>
             <Seg
               label={t('style.width')}
               value={v.strokeWidth}
@@ -283,7 +303,7 @@ export default function StylePanel({ editor }: { editor: Editor }) {
           </Field>
           {has(...SHAPES, 'line', 'arrow') && (
             <>
-              <Field label={t('style.strokeStyle')}>
+              <Field label={t('style.strokeStyle')} half>
                 <Seg
                   label={t('style.strokeStyle')}
                   value={v.strokeStyle}
@@ -295,7 +315,7 @@ export default function StylePanel({ editor }: { editor: Editor }) {
                   ]}
                 />
               </Field>
-              <Field label={t('style.roughness')}>
+              <Field label={t('style.roughness')} half={has('rectangle', 'diamond', 'triangle', 'line', 'arrow')}>
                 <Seg
                   label={t('style.roughness')}
                   value={v.roughness}
@@ -335,7 +355,7 @@ export default function StylePanel({ editor }: { editor: Editor }) {
             </>
           )}
           {has('rectangle', 'diamond', 'triangle', 'line', 'arrow') && (
-            <Field label={t('style.edges')}>
+            <Field label={t('style.edges')} half>
               <Seg
                 label={t('style.edges')}
                 value={v.edges}
@@ -352,7 +372,7 @@ export default function StylePanel({ editor }: { editor: Editor }) {
 
       {has('arrow') && (
         <Section>
-          <Field label={t('style.startHead')}>
+          <Field label={t('style.startHead')} value={t(`head.${v.startArrowhead}` as MessageKey)}>
             <Seg
               label={t('style.startHead')}
               value={v.startArrowhead}
@@ -364,7 +384,7 @@ export default function StylePanel({ editor }: { editor: Editor }) {
               }))}
             />
           </Field>
-          <Field label={t('style.endHead')}>
+          <Field label={t('style.endHead')} value={t(`head.${v.endArrowhead}` as MessageKey)}>
             <Seg
               label={t('style.endHead')}
               value={v.endArrowhead}
@@ -381,7 +401,10 @@ export default function StylePanel({ editor }: { editor: Editor }) {
 
       {showText && (
         <Section>
-          <Field label={t('style.font')}>
+          <Field
+            label={t('style.font')}
+            value={t(v.fontFamily === 'hand' ? 'style.fontHand' : v.fontFamily === 'sans' ? 'style.fontSans' : 'style.fontMono')}
+          >
             <Seg
               label={t('style.font')}
               value={v.fontFamily}
@@ -393,7 +416,7 @@ export default function StylePanel({ editor }: { editor: Editor }) {
               ]}
             />
           </Field>
-          <Field label={t('style.size')}>
+          <Field label={t('style.size')} half>
             <Seg
               label={t('style.size')}
               value={v.fontSize}
@@ -406,7 +429,7 @@ export default function StylePanel({ editor }: { editor: Editor }) {
               ].map(([size, l]) => ({ value: size as number, label: `${t('style.size')} ${l}`, icon: <span className="sk-seg-text">{l}</span> }))}
             />
           </Field>
-          <Field label={t('style.align')}>
+          <Field label={t('style.align')} half>
             <Seg
               label={t('style.align')}
               value={v.textAlign}

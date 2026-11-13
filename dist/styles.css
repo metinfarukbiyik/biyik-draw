@@ -393,8 +393,8 @@
 .sk-panel {
   display: flex;
   flex-direction: column;
-  width: 232px;
-  padding: 4px 12px;
+  width: 244px;
+  padding: 2px 14px;
   animation: sk-fade 160ms var(--sk-ease) both;
 }
 .sk-panel-toggle {
@@ -403,29 +403,45 @@
 
 .sk-sec {
   display: grid;
-  gap: 12px;
-  padding: 12px 0;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px 10px;
+  padding: 14px 0;
 }
 .sk-sec + .sk-sec {
   border-top: 1px solid var(--sk-line);
 }
 .sk-field {
   display: grid;
-  gap: 6px;
+  grid-column: 1 / -1;
+  align-content: start;
+  gap: 7px;
   min-width: 0;
+}
+.sk-field.is-half {
+  grid-column: auto;
 }
 .sk-field-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  color: var(--sk-muted);
+  gap: 8px;
+  min-width: 0;
+  color: var(--sk-ink);
   font-size: 12px;
   font-weight: 500;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+}
+.sk-field-head > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .sk-field-value {
-  color: var(--sk-ink);
-  font-family: var(--sk-mono);
-  font-size: 11px;
+  overflow: hidden;
+  color: var(--sk-subtle);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
 }
 
@@ -441,7 +457,7 @@
   display: grid;
   flex: 1;
   place-items: center;
-  height: 28px;
+  height: 30px;
   min-width: 0;
   padding: 0;
   border: 0;
@@ -475,14 +491,14 @@
 
 /* Renkler */
 .sk-swatches {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) 1px minmax(0, 1fr);
   align-items: center;
-  gap: 5px;
+  gap: 6px;
 }
 .sk-swatches-sep {
   width: 1px;
-  height: 18px;
-  margin: 0 2px;
+  height: 16px;
   background: var(--sk-line);
 }
 .sk-swatch {
@@ -492,10 +508,17 @@
   height: 22px;
   padding: 0;
   border: 0;
-  border-radius: 6px;
+  border-radius: 7px;
   box-shadow: inset 0 0 0 1px rgb(0 0 0 / 10%);
   cursor: pointer;
   transition: transform 120ms var(--sk-ease);
+}
+.sk-swatches .sk-swatch {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  max-width: 28px;
+  justify-self: center;
 }
 .sk-swatch:hover {
   transform: scale(1.08);
@@ -509,8 +532,8 @@
 .sk-app.is-dark .sk-swatch.is-active {
   box-shadow:
     inset 0 0 0 1px rgb(0 0 0 / 10%),
-    0 0 0 2px var(--sk-raised),
-    0 0 0 3.5px var(--sk-ink);
+    0 0 0 1.5px var(--sk-raised),
+    0 0 0 3px var(--sk-ink);
 }
 .sk-swatch.is-none {
   background:
@@ -574,13 +597,17 @@
 /* Eylem ikonları */
 .sk-icons {
   display: flex;
-  flex-wrap: wrap;
   gap: 2px;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--sk-sunken);
 }
 .sk-ibtn {
   display: grid;
+  flex: 1 1 0;
   place-items: center;
-  width: 30px;
+  min-width: 0;
+  width: 100%;
   height: 30px;
   padding: 0;
   border: 0;
@@ -590,7 +617,8 @@
   transition: background-color 120ms var(--sk-ease);
 }
 .sk-ibtn:hover:not(:disabled) {
-  background: var(--sk-sunken);
+  background: var(--sk-seg-active);
+  box-shadow: var(--sk-shadow-control);
   color: var(--sk-ink);
 }
 .sk-ibtn:disabled {
@@ -1154,4 +1182,13 @@
   .sk-wordmark {
     font-size: 1.6rem;
   }
+}
+
+.sk-layers-actions .sk-ibtn {
+  width: 28px;
+  height: 28px;
+}
+.sk-layers-actions .sk-ibtn:hover:not(:disabled) {
+  background: var(--sk-sunken);
+  box-shadow: none;
 }

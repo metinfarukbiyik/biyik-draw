@@ -28,8 +28,8 @@ const ARROWHEADS = [
 function Section({ children }) {
     return _jsx("section", { className: "sk-sec", children: children });
 }
-function Field({ label, aside, children }) {
-    return (_jsxs("div", { className: "sk-field", children: [_jsxs("div", { className: "sk-field-head", children: [_jsx("span", { children: label }), aside] }), children] }));
+function Field({ label, aside, value, half, children, }) {
+    return (_jsxs("div", { className: `sk-field${half ? ' is-half' : ''}`, children: [_jsxs("div", { className: "sk-field-head", children: [_jsx("span", { children: label }), aside ?? (value && _jsx("span", { className: "sk-field-value", children: value }))] }), children] }));
 }
 function Seg({ value, options, onChange, label, }) {
     return (_jsx("div", { className: "sk-seg", role: "group", "aria-label": label, children: options.map((o) => (_jsx("button", { type: "button", "aria-pressed": o.value === value, "aria-label": o.label, title: o.label, onClick: () => onChange(o.value), children: o.icon }, String(o.value)))) }));
@@ -67,7 +67,7 @@ export default function StylePanel({ editor }) {
         onMouseDown: (e) => {
             if (editing && !(e.target instanceof HTMLInputElement))
                 e.preventDefault();
-        }, children: [!onlyImages && (_jsxs(Section, { children: [_jsx(Field, { label: t('style.stroke'), children: _jsx(Swatches, { colors: STROKE_COLORS, value: v.strokeColor, onChange: (c) => set({ strokeColor: c }), label: t('style.stroke') }) }), hasShape && (_jsx(Field, { label: t('style.background'), children: _jsx(Swatches, { colors: BACKGROUND_COLORS, value: v.backgroundColor, onChange: (c) => set({ backgroundColor: c }), label: t('style.background') }) })), hasShape && v.backgroundColor !== 'transparent' && (_jsx(Field, { label: t('style.fill'), children: _jsx(Seg, { label: t('style.fill'), value: v.fillStyle, onChange: (fillStyle) => set({ fillStyle }), options: [
+        }, children: [!onlyImages && (_jsxs(Section, { children: [_jsx(Field, { label: t('style.stroke'), value: v.strokeColor.toUpperCase(), children: _jsx(Swatches, { colors: STROKE_COLORS, value: v.strokeColor, onChange: (c) => set({ strokeColor: c }), label: t('style.stroke') }) }), hasShape && (_jsx(Field, { label: t('style.background'), value: v.backgroundColor === 'transparent' ? t('style.noFill') : v.backgroundColor.toUpperCase(), children: _jsx(Swatches, { colors: BACKGROUND_COLORS, value: v.backgroundColor, onChange: (c) => set({ backgroundColor: c }), label: t('style.background') }) })), hasShape && v.backgroundColor !== 'transparent' && (_jsx(Field, { label: t('style.fill'), value: t(v.fillStyle === 'hachure' ? 'style.hachure' : v.fillStyle === 'cross' ? 'style.cross' : 'style.solid'), children: _jsx(Seg, { label: t('style.fill'), value: v.fillStyle, onChange: (fillStyle) => set({ fillStyle }), options: [
                                 {
                                     value: 'hachure',
                                     label: t('style.hachure'),
@@ -83,15 +83,15 @@ export default function StylePanel({ editor }) {
                                     label: t('style.solid'),
                                     icon: (_jsx(Glyph, { children: _jsx("rect", { x: "3.5", y: "3.5", width: "13", height: "13", rx: "3", strokeWidth: "1.4", fill: "currentColor" }) })),
                                 },
-                            ] }) }))] })), hasLines && (_jsxs(Section, { children: [_jsx(Field, { label: t('style.width'), children: _jsx(Seg, { label: t('style.width'), value: v.strokeWidth, onChange: (strokeWidth) => set({ strokeWidth }), options: [1, 2, 4].map((w) => ({
+                            ] }) }))] })), hasLines && (_jsxs(Section, { children: [_jsx(Field, { label: t('style.width'), half: has(...SHAPES, 'line', 'arrow'), children: _jsx(Seg, { label: t('style.width'), value: v.strokeWidth, onChange: (strokeWidth) => set({ strokeWidth }), options: [1, 2, 4].map((w) => ({
                                 value: w,
                                 label: t(w === 1 ? 'style.thin' : w === 2 ? 'style.bold' : 'style.extra'),
                                 icon: (_jsx(Glyph, { children: _jsx("path", { d: "M4 10h12", strokeWidth: w * 0.9 + 0.7 }) })),
-                            })) }) }), has(...SHAPES, 'line', 'arrow') && (_jsxs(_Fragment, { children: [_jsx(Field, { label: t('style.strokeStyle'), children: _jsx(Seg, { label: t('style.strokeStyle'), value: v.strokeStyle, onChange: (strokeStyle) => set({ strokeStyle }), options: [
+                            })) }) }), has(...SHAPES, 'line', 'arrow') && (_jsxs(_Fragment, { children: [_jsx(Field, { label: t('style.strokeStyle'), half: true, children: _jsx(Seg, { label: t('style.strokeStyle'), value: v.strokeStyle, onChange: (strokeStyle) => set({ strokeStyle }), options: [
                                         { value: 'solid', label: t('style.solidLine'), icon: _jsx(Glyph, { children: _jsx("path", { d: "M3 10h14", strokeWidth: "1.8" }) }) },
                                         { value: 'dashed', label: t('style.dashed'), icon: _jsx(Glyph, { children: _jsx("path", { d: "M3 10h14", strokeWidth: "1.8", strokeDasharray: "4 3" }) }) },
                                         { value: 'dotted', label: t('style.dotted'), icon: _jsx(Glyph, { children: _jsx("path", { d: "M3 10h14", strokeWidth: "2.2", strokeDasharray: "0.1 3.8" }) }) },
-                                    ] }) }), _jsx(Field, { label: t('style.roughness'), children: _jsx(Seg, { label: t('style.roughness'), value: v.roughness, onChange: (roughness) => set({ roughness }), options: [
+                                    ] }) }), _jsx(Field, { label: t('style.roughness'), half: has('rectangle', 'diamond', 'triangle', 'line', 'arrow'), children: _jsx(Seg, { label: t('style.roughness'), value: v.roughness, onChange: (roughness) => set({ roughness }), options: [
                                         {
                                             value: 0,
                                             label: t('style.rough0'),
@@ -107,27 +107,27 @@ export default function StylePanel({ editor }) {
                                             label: t('style.rough2'),
                                             icon: (_jsxs(Glyph, { children: [_jsx("path", { d: "M3 12c2-4.2 4.4 2.6 7-1.6s4.6 2.4 7-2.2", strokeWidth: "1.3" }), _jsx("path", { d: "M3.4 10c2.4-2.4 4.4 2.8 6.9-.4 2.2-2.8 4.4 1 6.5-1.6", strokeWidth: "0.9" })] })),
                                         },
-                                    ] }) })] })), has('rectangle', 'diamond', 'triangle', 'line', 'arrow') && (_jsx(Field, { label: t('style.edges'), children: _jsx(Seg, { label: t('style.edges'), value: v.edges, onChange: (edges) => set({ edges }), options: [
+                                    ] }) })] })), has('rectangle', 'diamond', 'triangle', 'line', 'arrow') && (_jsx(Field, { label: t('style.edges'), half: true, children: _jsx(Seg, { label: t('style.edges'), value: v.edges, onChange: (edges) => set({ edges }), options: [
                                 { value: 'sharp', label: t('style.sharp'), icon: _jsx(Glyph, { children: _jsx("path", { d: "M5 15V5h10", strokeWidth: "1.6" }) }) },
                                 { value: 'round', label: t('style.round'), icon: _jsx(Glyph, { children: _jsx("path", { d: "M5 15V10a5 5 0 0 1 5-5h5", strokeWidth: "1.6" }) }) },
-                            ] }) }))] })), has('arrow') && (_jsxs(Section, { children: [_jsx(Field, { label: t('style.startHead'), children: _jsx(Seg, { label: t('style.startHead'), value: v.startArrowhead, onChange: (startArrowhead) => set({ startArrowhead }), options: ARROWHEADS.map((a) => ({
+                            ] }) }))] })), has('arrow') && (_jsxs(Section, { children: [_jsx(Field, { label: t('style.startHead'), value: t(`head.${v.startArrowhead}`), children: _jsx(Seg, { label: t('style.startHead'), value: v.startArrowhead, onChange: (startArrowhead) => set({ startArrowhead }), options: ARROWHEADS.map((a) => ({
                                 value: a.value,
                                 label: t(`head.${a.value}`),
                                 icon: _jsx(Glyph, { children: _jsx("path", { d: a.start, strokeWidth: "1.5" }) }),
-                            })) }) }), _jsx(Field, { label: t('style.endHead'), children: _jsx(Seg, { label: t('style.endHead'), value: v.endArrowhead, onChange: (endArrowhead) => set({ endArrowhead }), options: ARROWHEADS.map((a) => ({
+                            })) }) }), _jsx(Field, { label: t('style.endHead'), value: t(`head.${v.endArrowhead}`), children: _jsx(Seg, { label: t('style.endHead'), value: v.endArrowhead, onChange: (endArrowhead) => set({ endArrowhead }), options: ARROWHEADS.map((a) => ({
                                 value: a.value,
                                 label: t(`head.${a.value}`),
                                 icon: _jsx(Glyph, { children: _jsx("path", { d: a.end, strokeWidth: "1.5" }) }),
-                            })) }) })] })), showText && (_jsxs(Section, { children: [_jsx(Field, { label: t('style.font'), children: _jsx(Seg, { label: t('style.font'), value: v.fontFamily, onChange: (fontFamily) => set({ fontFamily }), options: [
+                            })) }) })] })), showText && (_jsxs(Section, { children: [_jsx(Field, { label: t('style.font'), value: t(v.fontFamily === 'hand' ? 'style.fontHand' : v.fontFamily === 'sans' ? 'style.fontSans' : 'style.fontMono'), children: _jsx(Seg, { label: t('style.font'), value: v.fontFamily, onChange: (fontFamily) => set({ fontFamily }), options: [
                                 { value: 'hand', label: t('style.fontHand'), icon: _jsx("span", { className: "sk-seg-text is-hand", children: "Aa" }) },
                                 { value: 'sans', label: t('style.fontSans'), icon: _jsx("span", { className: "sk-seg-text", children: "Aa" }) },
                                 { value: 'mono', label: t('style.fontMono'), icon: _jsx("span", { className: "sk-seg-text is-mono", children: '{}' }) },
-                            ] }) }), _jsx(Field, { label: t('style.size'), children: _jsx(Seg, { label: t('style.size'), value: v.fontSize, onChange: (fontSize) => set({ fontSize }), options: [
+                            ] }) }), _jsx(Field, { label: t('style.size'), half: true, children: _jsx(Seg, { label: t('style.size'), value: v.fontSize, onChange: (fontSize) => set({ fontSize }), options: [
                                 [16, 'S'],
                                 [24, 'M'],
                                 [32, 'L'],
                                 [48, 'XL'],
-                            ].map(([size, l]) => ({ value: size, label: `${t('style.size')} ${l}`, icon: _jsx("span", { className: "sk-seg-text", children: l }) })) }) }), _jsx(Field, { label: t('style.align'), children: _jsx(Seg, { label: t('style.align'), value: v.textAlign, onChange: (textAlign) => set({ textAlign }), options: [
+                            ].map(([size, l]) => ({ value: size, label: `${t('style.size')} ${l}`, icon: _jsx("span", { className: "sk-seg-text", children: l }) })) }) }), _jsx(Field, { label: t('style.align'), half: true, children: _jsx(Seg, { label: t('style.align'), value: v.textAlign, onChange: (textAlign) => set({ textAlign }), options: [
                                 { value: 'left', label: t('style.alignLeft'), icon: _jsx(AlignLeft, { size: 16 }) },
                                 { value: 'center', label: t('style.alignCenter'), icon: _jsx(AlignCenter, { size: 16 }) },
                                 { value: 'right', label: t('style.alignRight'), icon: _jsx(AlignRight, { size: 16 }) },
