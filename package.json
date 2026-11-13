@@ -1,0 +1,65 @@
+{
+  "name": "biyik-draw",
+  "version": "1.0.0",
+  "description": "A hand-drawn style whiteboard for the browser — engine and React UI written from scratch. Powers draw.biyik.dev.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Metin Faruk Bıyık (https://biyik.dev)",
+  "homepage": "https://draw.biyik.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/metinfarukbiyik/biyik-draw.git"
+  },
+  "bugs": "https://github.com/metinfarukbiyik/biyik-draw/issues",
+  "keywords": [
+    "whiteboard",
+    "drawing",
+    "sketch",
+    "hand-drawn",
+    "diagram",
+    "flowchart",
+    "canvas",
+    "react"
+  ],
+  "sideEffects": [
+    "*.css"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/sketch/index.d.ts",
+      "import": "./dist/sketch/index.js"
+    },
+    "./react": {
+      "types": "./dist/sketch-react/index.d.ts",
+      "import": "./dist/sketch-react/index.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "README.tr.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "dev": "vite demo",
+    "build": "tsc -p tsconfig.build.json && node scripts/postbuild.mjs",
+    "build:demo": "vite build demo",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "lucide-react": ">=0.460.0",
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.5",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "lucide-react": "^0.562.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "typescript": "~5.9.3",
+    "vite": "^7.2.4"
+  }
+}
