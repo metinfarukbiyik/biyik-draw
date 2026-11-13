@@ -41,3 +41,8 @@ export declare function sketchRoundedPolygon(corners: Point[], radius: number, r
 export declare function hatchSegments(polygon: Point[], gap: number, angleDeg: number): [Point, Point][];
 /** Serbest çizim izini yumuşatır (ardışık noktaların orta noktalarından geçen eğri). */
 export declare function freehandPath(points: Point[]): string;
+/**
+ * Kalem basıncıyla değişen kalınlıkta iz: noktaların iki yanına basınca göre açılan bir şerit
+ * çizilir ve dolgu olarak boyanır. Uçlar yarım daireyle kapatılır.
+ */
+export declare function pressureOutline(points: Point[], pressures: number[], width: number): string;

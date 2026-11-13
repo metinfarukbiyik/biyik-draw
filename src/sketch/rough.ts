@@ -259,3 +259,61 @@ export function freehandPath(points: Point[]): string {
   }
   return `${d}L${pt(points[points.length - 1])}`;
 }
+
+/**
+ * Kalem basıncıyla değişen kalınlıkta iz: noktaların iki yanına basınca göre açılan bir şerit
+ * çizilir ve dolgu olarak boyanır. Uçlar yarım daireyle kapatılır.
+ */
+export function pressureOutline(points: Point[], pressures: number[], width: number): string {
+  const count = points.length;
+  if (!count) return '';
+  // Basıncı yumuşat: ani sıçramalar titreme gibi görünmesin
+  const p = pressures.map((_, i) => {
+    let sum = 0;
+    let k = 0;
+    for (let j = Math.max(0, i - 2); j <= Math.min(count - 1, i + 2); j++) {
+      sum += pressures[j] ?? 0.5;
+      k++;
+    }
+    return sum / k;
+  });
+  const half = (i: number) => (width * (0.28 + 0.92 * Math.min(1, Math.max(0, p[i])))) / 2;
+  if (count < 2) {
+    const r = Math.max(0.5, half(0));
+    const [x, y] = points[0];
+    return `M${n(x - r)} ${n(y)}A${n(r)} ${n(r)} 0 1 0 ${n(x + r)} ${n(y)}A${n(r)} ${n(r)} 0 1 0 ${n(x - r)} ${n(y)}Z`;
+  }
+  const left: Point[] = [];
+  const right: Point[] = [];
+  for (let i = 0; i < count; i++) {
+    const a = points[Math.max(0, i - 1)];
+    const b = points[Math.min(count - 1, i + 1)];
+    let tx = b[0] - a[0];
+    let ty = b[1] - a[1];
+    const len = Math.hypot(tx, ty) || 1;
+    tx /= len;
+    ty /= len;
+    const h = half(i);
+    left.push([points[i][0] - ty * h, points[i][1] + tx * h]);
+    right.push([points[i][0] + ty * h, points[i][1] - tx * h]);
+  }
+  const side = (pts: Point[]) => {
+    let d = '';
+    for (let i = 1; i < pts.length - 1; i++) {
+      const [x, y] = pts[i];
+      const [x2, y2] = pts[i + 1];
+      d += `Q${n(x)} ${n(y)} ${n((x + x2) / 2)} ${n((y + y2) / 2)}`;
+    }
+    return d + `L${pt(pts[pts.length - 1])}`;
+  };
+  const rEnd = half(count - 1);
+  const rStart = half(0);
+  const back = [...right].reverse();
+  return (
+    `M${pt(left[0])}` +
+    side(left) +
+    `A${n(rEnd)} ${n(rEnd)} 0 0 1 ${pt(back[0])}` +
+    side(back) +
+    `A${n(rStart)} ${n(rStart)} 0 0 1 ${pt(left[0])}Z`
+  );
+}

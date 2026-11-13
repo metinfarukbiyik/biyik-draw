@@ -2,7 +2,7 @@
  * biyik.dev Sketch — düzenleyici çekirdeği. Arayüzden bağımsızdır: işaretçi, tekerlek ve klavye
  * olaylarını alır, sahneyi (öğeler + görünüm) günceller ve abonelerine haber verir.
  */
-import type { Files, Point, SceneFile, SketchElement, StyleProps, Theme, Tool, View } from './types.js';
+import type { Paper, Files, Point, SceneFile, SketchElement, StyleProps, Theme, Tool, View } from './types.js';
 import { isLinear, isShape } from './shapes.js';
 import { type Overlay } from './render.js';
 export declare const DEFAULT_STYLE: StyleProps;
@@ -16,6 +16,12 @@ export interface AppState {
     theme: Theme;
     background: string;
     grid: boolean;
+    /** Kâğıt deseni (kareli, çizgili, kılavuz çizgili…). */
+    paper: Paper;
+    /** Avuç içi koruması: dokunmatik yalnızca kaydırır/yakınlaştırır, kalem çizer. */
+    penOnly: boolean;
+    /** Fosforlu kalem rengi. */
+    highlightColor: string;
     view: View;
     viewport: {
         width: number;
@@ -33,6 +39,8 @@ export interface PointerInput {
     shift: boolean;
     alt: boolean;
     mod: boolean;
+    /** Kalem basıncı (0–1); fare için 0.5. */
+    pressure?: number;
 }
 export interface Frame {
     cx: number;
@@ -61,6 +69,14 @@ export declare class Editor {
     private coalesceAt;
     private drag;
     private dragSnapshot;
+    /** Sürüklemeyi başlatan işaretçi: diğer parmaklar/avuç içi ona karışmaz. */
+    private dragPointer;
+    /** Kalem ilk kez algılanınca çağrılır (avuç içi koruması otomatik açıldı). */
+    onPenDetected: (() => void) | null;
+    private penSeen;
+    /** Lazer izinin noktaları (dünya koordinatı + zaman). */
+    private laser;
+    private laserFrame;
     private editSnapshot;
     private pending;
     private pointers;
@@ -149,6 +165,18 @@ export declare class Editor {
     ungroup(): void;
     reorder(kind: 'front' | 'back' | 'forward' | 'backward'): void;
     nudge(dx: number, dy: number): void;
+    /** Sağ tık/uzun basma: tıklanan öğe seçili değilse onu seçer; boşlukta seçimi temizler. */
+    selectAt(sx: number, sy: number): void;
+    /** Seçimde bir metin ve bir şekil varsa: metin şeklin etiketi olur. */
+    canBindText(): boolean;
+    bindTextToContainer(): void;
+    canWrapText(): boolean;
+    /** Seçili metinleri, metni etiket olarak taşıyan dikdörtgenlere dönüştürür. */
+    wrapTextInContainer(): void;
+    /** Seçimin çevresine bir çerçeve çizer ve hepsini gruplar. */
+    wrapSelectionInFrame(): void;
+    /** Seçimdeki (yoksa tüm) metinler: metin öğeleri ve şekil etiketleri, yukarıdan aşağıya. */
+    plainText(): string;
     copySelection(): string | null;
     cutSelection(): string | null;
     /** Panodan gelen metni yapıştırır: kendi öğelerimiz ya da düz metin. */
@@ -179,6 +207,20 @@ export declare class Editor {
     pointerMove(p: PointerInput): void;
     pointerUp(p: PointerInput): void;
     pointerCancel(p: PointerInput): void;
+    /** Uzun basma ile bağlam menüsü açılınca devam eden hareketi geri al. */
+    cancelGesture(): void;
+    private static LASER_MS;
+    private addLaserPoint;
+    private tickLaser;
+    /** Lazer izi: nokta ve 0–1 arası tazelik (1 en yeni). */
+    laserTrail(): {
+        x: number;
+        y: number;
+        life: number;
+    }[];
+    setPaper(paper: Paper): void;
+    setPenOnly(penOnly: boolean): void;
+    setHighlightColor(highlightColor: string): void;
     private endCreation;
     private commitDrag;
     private cancelDrag;

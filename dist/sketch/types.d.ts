@@ -8,7 +8,7 @@
  */
 export type Point = [number, number];
 export type ElementType = 'rectangle' | 'diamond' | 'triangle' | 'ellipse' | 'line' | 'arrow' | 'freedraw' | 'text' | 'image';
-export type Tool = 'select' | 'hand' | 'rectangle' | 'diamond' | 'triangle' | 'ellipse' | 'arrow' | 'line' | 'freedraw' | 'text' | 'image' | 'eraser';
+export type Tool = 'select' | 'hand' | 'rectangle' | 'diamond' | 'triangle' | 'ellipse' | 'arrow' | 'line' | 'freedraw' | 'text' | 'image' | 'eraser' | 'highlighter' | 'laser';
 export type FillStyle = 'hachure' | 'cross' | 'solid';
 export type StrokeStyle = 'solid' | 'dashed' | 'dotted';
 export type Arrowhead = 'none' | 'arrow' | 'triangle' | 'dot' | 'bar';
@@ -16,6 +16,8 @@ export type FontFamily = 'hand' | 'sans' | 'mono';
 export type TextAlign = 'left' | 'center' | 'right';
 export type Edges = 'sharp' | 'round';
 export type Theme = 'light' | 'dark';
+/** Tuval kâğıt deseni: düz, kareli, noktalı, çizgili defter, kılavuz çizgili (güzel yazı). */
+export type Paper = 'none' | 'grid' | 'dots' | 'lines' | 'guide';
 /** Çizim araçlarının ve seçili öğelerin paylaştığı stil özellikleri. */
 export interface StyleProps {
     strokeColor: string;
@@ -63,6 +65,10 @@ export interface SketchElement extends StyleProps {
     hidden?: boolean;
     /** Kilitli öğeler tuvalde seçilemez, taşınamaz ve silinemez. */
     locked?: boolean;
+    /** Serbest çizim: kalem basıncı (0–1), noktalarla aynı uzunlukta. */
+    pressures?: number[];
+    /** Serbest çizim: fosforlu kalem (yarı saydam, alttaki yazıyı örtmez). */
+    highlight?: boolean;
 }
 export type Files = Record<string, string>;
 export interface View {
@@ -78,4 +84,5 @@ export interface SceneFile {
     elements: SketchElement[];
     files: Files;
     background?: string;
+    paper?: Paper;
 }

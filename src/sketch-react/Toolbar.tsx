@@ -6,6 +6,7 @@ import {
   Diamond,
   Eraser,
   Hand,
+  Highlighter,
   ImagePlus,
   Lock,
   LockOpen,
@@ -21,6 +22,17 @@ import type { Editor, Tool } from '../sketch';
 import { useEditor } from './useEditor';
 import { useI18n, type MessageKey } from './i18n';
 
+/** Lazer işaretçi ikonu: parlayan nokta ve iz. */
+export function LaserIcon({ size = 17 }: { size?: number | string; strokeWidth?: number | string }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden>
+      <path d="M3 20c3-1 5-3 7-6s4.5-5 7.5-6" opacity="0.45" />
+      <circle cx="18.5" cy="7.5" r="2.5" fill="currentColor" stroke="none" />
+      <path d="M18.5 2.5v1.2M23.5 7.5h-1.2M22 4l-.9.9" />
+    </svg>
+  );
+}
+
 const TOOLS: { tool: Tool; key: string; Icon: LucideIcon }[] = [
   { tool: 'hand', key: 'H', Icon: Hand },
   { tool: 'select', key: 'V', Icon: MousePointer2 },
@@ -31,6 +43,8 @@ const TOOLS: { tool: Tool; key: string; Icon: LucideIcon }[] = [
   { tool: 'arrow', key: 'A', Icon: ArrowRight },
   { tool: 'line', key: 'L', Icon: Minus },
   { tool: 'freedraw', key: 'P', Icon: Pencil },
+  { tool: 'highlighter', key: 'M', Icon: Highlighter },
+  { tool: 'laser', key: 'K', Icon: LaserIcon as LucideIcon },
   { tool: 'text', key: 'T', Icon: Type },
   { tool: 'image', key: '9', Icon: ImagePlus },
   { tool: 'eraser', key: 'E', Icon: Eraser },

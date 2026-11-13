@@ -1,7 +1,7 @@
 'use client';
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { AlignCenter, AlignCenterHorizontal, AlignCenterVertical, AlignEndHorizontal, AlignEndVertical, AlignHorizontalDistributeCenter, AlignLeft, AlignRight, AlignStartHorizontal, AlignStartVertical, AlignVerticalDistributeCenter, ArrowDown, ArrowUp, BringToFront, Copy, FlipHorizontal2, FlipVertical2, Group, Lock, Paintbrush, PaintBucket, SendToBack, Trash2, Ungroup, } from 'lucide-react';
-import { BACKGROUND_COLORS, STROKE_COLORS, } from '../sketch/index.js';
+import { BACKGROUND_COLORS, HIGHLIGHT_COLORS, STROKE_COLORS, } from '../sketch/index.js';
 import { useEditor } from './useEditor.js';
 import { useI18n } from './i18n.js';
 const TOOL_TYPE = {
@@ -12,6 +12,7 @@ const TOOL_TYPE = {
     arrow: 'arrow',
     line: 'line',
     freedraw: 'freedraw',
+    highlighter: 'freedraw',
     text: 'text',
 };
 const SHAPES = ['rectangle', 'diamond', 'triangle', 'ellipse'];
@@ -41,7 +42,7 @@ function Swatches({ colors, value, onChange, label, }) {
     const custom = !colors.includes(value);
     const { t } = useI18n();
     const noFill = t('style.noFill');
-    return (_jsxs("div", { className: "sk-swatches", role: "group", "aria-label": label, children: [colors.map((c) => (_jsx("button", { type: "button", className: `sk-swatch${c === 'transparent' ? ' is-none' : ''}`, style: c === 'transparent' ? undefined : { background: c }, "aria-pressed": value === c, "aria-label": c === 'transparent' ? noFill : c, title: c === 'transparent' ? noFill : c, onClick: () => onChange(c) }, c))), _jsx("span", { className: "sk-swatches-sep", "aria-hidden": true }), _jsx("label", { className: `sk-swatch is-custom${custom ? ' is-active' : ''}`, style: custom && value !== 'transparent' ? { background: value } : undefined, title: `${label} · ${t('style.custom')}`, children: _jsx("input", { type: "color", value: custom && value !== 'transparent' ? value : '#000000', onChange: (e) => onChange(e.target.value), "aria-label": `${label} · ${t('style.custom')}` }) })] }));
+    return (_jsxs("div", { className: "sk-swatches", role: "group", "aria-label": label, style: { gridTemplateColumns: `repeat(${colors.length}, minmax(0, 1fr)) 1px minmax(0, 1fr)` }, children: [colors.map((c) => (_jsx("button", { type: "button", className: `sk-swatch${c === 'transparent' ? ' is-none' : ''}`, style: c === 'transparent' ? undefined : { background: c }, "aria-pressed": value === c, "aria-label": c === 'transparent' ? noFill : c, title: c === 'transparent' ? noFill : c, onClick: () => onChange(c) }, c))), _jsx("span", { className: "sk-swatches-sep", "aria-hidden": true }), _jsx("label", { className: `sk-swatch is-custom${custom ? ' is-active' : ''}`, style: custom && value !== 'transparent' ? { background: value } : undefined, title: `${label} · ${t('style.custom')}`, children: _jsx("input", { type: "color", value: custom && value !== 'transparent' ? value : '#000000', onChange: (e) => onChange(e.target.value), "aria-label": `${label} · ${t('style.custom')}` }) })] }));
 }
 export default function StylePanel({ editor }) {
     const state = useEditor(editor);
@@ -53,7 +54,9 @@ export default function StylePanel({ editor }) {
     if (!targets.length && !toolType)
         return null;
     const types = new Set(targets.length ? targets.map((t) => t.type) : [toolType]);
-    const v = targets[0] ?? state.style;
+    // Fosforlu kalem: kendi renk paleti ve rengi
+    const highlightMode = targets.length ? targets.every((el) => el.highlight) : state.tool === 'highlighter';
+    const v = targets[0] ?? (highlightMode ? { ...state.style, strokeColor: state.highlightColor } : state.style);
     const set = (patch) => editor.setStyle(patch);
     const has = (...t) => t.some((x) => types.has(x));
     const onlyImages = types.size === 1 && types.has('image');
@@ -67,7 +70,7 @@ export default function StylePanel({ editor }) {
         onMouseDown: (e) => {
             if (editing && !(e.target instanceof HTMLInputElement))
                 e.preventDefault();
-        }, children: [!onlyImages && (_jsxs(Section, { children: [_jsx(Field, { label: t('style.stroke'), value: v.strokeColor.toUpperCase(), children: _jsx(Swatches, { colors: STROKE_COLORS, value: v.strokeColor, onChange: (c) => set({ strokeColor: c }), label: t('style.stroke') }) }), hasShape && (_jsx(Field, { label: t('style.background'), value: v.backgroundColor === 'transparent' ? t('style.noFill') : v.backgroundColor.toUpperCase(), children: _jsx(Swatches, { colors: BACKGROUND_COLORS, value: v.backgroundColor, onChange: (c) => set({ backgroundColor: c }), label: t('style.background') }) })), hasShape && v.backgroundColor !== 'transparent' && (_jsx(Field, { label: t('style.fill'), value: t(v.fillStyle === 'hachure' ? 'style.hachure' : v.fillStyle === 'cross' ? 'style.cross' : 'style.solid'), children: _jsx(Seg, { label: t('style.fill'), value: v.fillStyle, onChange: (fillStyle) => set({ fillStyle }), options: [
+        }, children: [!onlyImages && (_jsxs(Section, { children: [_jsx(Field, { label: t('style.stroke'), value: v.strokeColor.toUpperCase(), children: _jsx(Swatches, { colors: highlightMode ? HIGHLIGHT_COLORS : STROKE_COLORS, value: v.strokeColor, onChange: (c) => (highlightMode ? editor.setHighlightColor(c) : set({ strokeColor: c })), label: t('style.stroke') }) }), hasShape && (_jsx(Field, { label: t('style.background'), value: v.backgroundColor === 'transparent' ? t('style.noFill') : v.backgroundColor.toUpperCase(), children: _jsx(Swatches, { colors: BACKGROUND_COLORS, value: v.backgroundColor, onChange: (c) => set({ backgroundColor: c }), label: t('style.background') }) })), hasShape && v.backgroundColor !== 'transparent' && (_jsx(Field, { label: t('style.fill'), value: t(v.fillStyle === 'hachure' ? 'style.hachure' : v.fillStyle === 'cross' ? 'style.cross' : 'style.solid'), children: _jsx(Seg, { label: t('style.fill'), value: v.fillStyle, onChange: (fillStyle) => set({ fillStyle }), options: [
                                 {
                                     value: 'hachure',
                                     label: t('style.hachure'),

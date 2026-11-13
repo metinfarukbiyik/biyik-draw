@@ -11,6 +11,8 @@ Tamamen tarayıcıda çalışan, el çizimi görünümlü bir beyaz tahta. Çizi
 - **Bağlı oklar:** okun ucunu bir şeklin üstüne bırak; şekil taşınsa, büyüse ya da dönse de ok bağlı kalır
 - **Katmanlar paneli:** sürükleyerek sıralama, adlandırma, gizleme, kilitleme, açılıp kapanan gruplar
 - **Düzenleme:** çoklu seçim, boyutlandırma, döndürme, çevirme, hizalama, eşit dağıtma, kopyala/yapıştır (stil dahil), geri al/yinele
+- **Sağ tık menüsü:** sağ tık ya da dokunmatikte basılı tutma: panoya PNG/SVG/metin, metni şekle bağlama, metni kutu içine alma, çerçeveye alma, katman sırası ve fazlası
+- **Öğretmenler ve tablet için:** ders modu (tam ekran, büyük düğmeler), kareli, noktalı, çizgili ve kılavuz çizgili (güzel yazı) kâğıt, fosforlu kalem, lazer işaretçi, kalem basıncı ve avuç içi koruması
 - **Paylaşma:** çizimin kendisini taşıyan bağlantı (hiçbir şey yüklenmez), “Tahtama ekle”li salt okunur görünüm ve çevrimdışı HTML dosyası
 - **Dışa aktarma:** PNG, SVG (yazı tipleri gömülü) ya da pano; `.biyikdraw` dosyası olarak kaydetme ve açma
 - **Hazır gelenler:** IndexedDB'ye otomatik kayıt, koyu tema, mobil ve dokunmatik (iki parmakla yakınlaştırma), Türkçe ve İngilizce arayüz
@@ -86,6 +88,17 @@ Tüm renkler `.sk-app` üzerindeki CSS değişkenleridir:
   --sk-font: 'Inter', system-ui, sans-serif;
 }
 ```
+
+## Öğretmenler ve tablet için
+
+Tabletten ders anlatıp projeksiyona ya da akıllı tahtaya yansıtmak için:
+
+- **Ders modu** (`⌥P`): tam ekran; kalem, fosforlu kalem, lazer, silgi, renkler, kalınlık, kâğıt, geri al ve yeni sayfa için büyük dokunma düğmeleri.
+- **Kâğıt desenleri:** kareli, noktalı, çizgili ve kılavuz çizgili (dört çizgili güzel yazı). Kodla: `editor.setPaper('guide')`.
+- **Fosforlu kalem** (`M`) ve **lazer işaretçi** (`K`).
+- **Kalem basıncı** ve **avuç içi koruması:** kalem algılanınca dokunmatik yalnızca kaydırır ve yakınlaştırır (`editor.setPenOnly(false)` ile kapatılır).
+
+![Ders modu](docs/images/tr-teach.webp)
 
 ## Paylaşma ve çevrimdışı
 

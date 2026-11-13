@@ -3,6 +3,9 @@ import type { Theme } from './types';
 
 export const STROKE_COLORS = ['#18181b', '#dc2626', '#16a34a', '#2563eb', '#d97706', '#9333ea'];
 export const BACKGROUND_COLORS = ['transparent', '#fecaca', '#bbf7d0', '#bfdbfe', '#fde68a', '#e9d5ff'];
+/** Fosforlu kalem renkleri. */
+export const HIGHLIGHT_COLORS = ['#facc15', '#4ade80', '#f472b6', '#60a5fa', '#fb923c'];
+
 export const CANVAS_COLORS = ['#ffffff', '#fafafa', '#f5f5f4', '#f0f9ff', '#fefce8', '#fdf2f8'];
 
 export const SELECTION_COLOR = '#3b82f6';

@@ -4,12 +4,13 @@
  *
  *   https://draw.biyik.dev/#share=1.<base64url(deflate(json))>
  */
-import type { Files, SketchElement } from '../sketch';
+import type { Files, Paper, SketchElement } from '../sketch';
 
 export interface SharePayload {
   elements: SketchElement[];
   files: Files;
   background?: string;
+  paper?: Paper;
 }
 
 const KEY = 'share=';
@@ -20,6 +21,7 @@ function compactJson(p: SharePayload): string {
     {
       v: 1,
       b: p.background,
+      p: p.paper && p.paper !== 'none' ? p.paper : undefined,
       e: p.elements.map((el) => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { version, ...rest } = el;
@@ -75,6 +77,7 @@ export async function decodeShare(hash: string): Promise<SharePayload | null> {
       elements: json.e.map((el: SketchElement) => ({ ...el, version: 1 })),
       files: json.f ?? {},
       background: json.b,
+      paper: json.p,
     };
   } catch {
     return null;

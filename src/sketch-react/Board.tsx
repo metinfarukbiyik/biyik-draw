@@ -27,14 +27,22 @@ const toInput = (e: PointerEvent | ReactPointerEvent, rect: DOMRect): PointerInp
   shift: e.shiftKey,
   alt: e.altKey,
   mod: e.metaKey || e.ctrlKey,
+  pressure: e.pointerType === 'pen' ? e.pressure : 0.5,
 });
+
+/** Dokunmatikte bağlam menüsü için basılı tutma süresi ve izin verilen kayma. */
+const LONG_PRESS_MS = 550;
+const LONG_PRESS_SLOP = 8;
 
 export default function Board({
   editor,
   onDropFile,
+  onContextMenu,
 }: {
   editor: Editor;
   onDropFile: (file: File, at: [number, number]) => void;
+  /** Sağ tık ya da uzun basma: ekran (client) koordinatı. */
+  onContextMenu?: (x: number, y: number) => void;
 }) {
   const state = useEditor(editor);
   const { t } = useI18n();
@@ -42,6 +50,12 @@ export default function Board({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frame = useRef(0);
   const size = useRef({ width: 0, height: 0, dpr: 1 });
+  const longPress = useRef<{ timer: number; x: number; y: number; id: number } | null>(null);
+
+  const cancelLongPress = () => {
+    if (longPress.current) window.clearTimeout(longPress.current.timer);
+    longPress.current = null;
+  };
 
   const images = useMemo(() => new ImageCache(() => editor.remeasureText()), [editor]);
 
@@ -62,26 +76,31 @@ export default function Board({
     return () => ro.disconnect();
   }, [editor]);
 
-  // Çizim: her değişiklikte bir sonraki kareye
+  // Çizim: değişiklikten sonraki ilk karede, o anki en güncel durumla. Zaten bekleyen bir kare
+  // varsa yenisi istenmez (iptal edip ertelemek, her karede değişen lazer izini hiç çizdirmezdi).
   useEffect(() => {
-    cancelAnimationFrame(frame.current);
+    if (frame.current) return;
     frame.current = requestAnimationFrame(() => {
+      frame.current = 0;
       const ctx = canvasRef.current?.getContext('2d');
       const { width, height, dpr } = size.current;
       if (!ctx || !width) return;
+      const st = editor.state;
       renderScene(ctx, editor.elements, editor.getOverlay(), {
-        view: state.view,
+        view: st.view,
         width,
         height,
         dpr,
-        theme: state.theme,
-        background: state.background,
-        grid: state.grid ? 20 : null,
+        theme: st.theme,
+        background: st.background,
+        grid: st.grid ? 20 : null,
+        paper: st.paper,
         images,
         files: editor.files,
       });
     });
   });
+  useEffect(() => () => cancelAnimationFrame(frame.current), []);
 
   // Tekerlek: yakınlaştırma (Ctrl/⌘ ya da iki parmak) ve kaydırma
   useEffect(() => {
@@ -139,15 +158,54 @@ export default function Board({
           (document.activeElement as HTMLElement | null)?.blur?.();
           e.currentTarget.setPointerCapture(e.pointerId);
           editor.pointerDown(toInput(e, rect()));
+          // Dokunmatik: tek parmakla basılı tut → bağlam menüsü
+          cancelLongPress();
+          if (e.pointerType === 'touch' && onContextMenu && e.isPrimary) {
+            const { clientX, clientY, pointerId } = e;
+            longPress.current = {
+              x: clientX,
+              y: clientY,
+              id: pointerId,
+              timer: window.setTimeout(() => {
+                longPress.current = null;
+                editor.cancelGesture();
+                const r = rect();
+                editor.selectAt(clientX - r.left, clientY - r.top);
+                onContextMenu(clientX, clientY);
+              }, LONG_PRESS_MS),
+            };
+          } else if (e.pointerType === 'touch') cancelLongPress();
         }}
-        onPointerMove={(e) => editor.pointerMove(toInput(e, rect()))}
-        onPointerUp={(e) => editor.pointerUp(toInput(e, rect()))}
-        onPointerCancel={(e) => editor.pointerCancel(toInput(e, rect()))}
+        onPointerMove={(e) => {
+          const lp = longPress.current;
+          if (lp && (e.pointerId !== lp.id || Math.hypot(e.clientX - lp.x, e.clientY - lp.y) > LONG_PRESS_SLOP))
+            cancelLongPress();
+          const r = rect();
+          // Kalem ve hızlı hareketlerde ara noktalar: daha akıcı çizgi
+          const events = e.nativeEvent.getCoalescedEvents?.() ?? [];
+          if (events.length > 1) for (const ev of events) editor.pointerMove(toInput(ev, r));
+          else editor.pointerMove(toInput(e, r));
+        }}
+        onPointerUp={(e) => {
+          cancelLongPress();
+          editor.pointerUp(toInput(e, rect()));
+        }}
+        onPointerCancel={(e) => {
+          cancelLongPress();
+          editor.pointerCancel(toInput(e, rect()));
+        }}
         onDoubleClick={(e) => {
           const r = rect();
           editor.doubleClick(e.clientX - r.left, e.clientY - r.top);
         }}
-        onContextMenu={(e) => e.preventDefault()}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          // Dokunmatikte menüyü uzun basma açar (tarayıcının kendi olayı yok sayılır)
+          if (!onContextMenu || longPress.current || e.nativeEvent instanceof PointerEvent && e.nativeEvent.pointerType === 'touch') return;
+          const r = rect();
+          editor.selectAt(e.clientX - r.left, e.clientY - r.top);
+          onContextMenu(e.clientX, e.clientY);
+        }}
       />
       {editing && <TextEditor key={editing.id} editor={editor} element={editing} />}
     </div>

@@ -29,6 +29,8 @@ import {
   Trash2,
   Undo2,
   Eye,
+  Presentation,
+  PenLine,
 } from "lucide-react";
 import {
   CANVAS_COLORS,
@@ -40,6 +42,7 @@ import {
   type StyleProps,
   type Theme,
   type View,
+  type Paper,
 } from "../sketch";
 import Board from "./Board";
 import Toolbar from "./Toolbar";
@@ -55,6 +58,16 @@ import {
 } from "./Dialogs";
 import { decodeShare, hasShare, type SharePayload } from "./share";
 import { sceneFromHtml } from "./offline";
+import ContextMenu from "./ContextMenu";
+import PresentBar from "./PresentBar";
+import { PaperPicker } from "./PaperPicker";
+import {
+  copyPng,
+  copyShareLink,
+  copySvg,
+  copyText,
+  pasteFromClipboard,
+} from "./clipboard";
 import { getItem, setItem } from "./storage";
 import { useEditor } from "./useEditor";
 import { browserLang, I18nContext, makeT, type Lang } from "./i18n";
@@ -107,6 +120,9 @@ interface Prefs {
   view: View;
   style: StyleProps;
   toolLocked: boolean;
+  paper?: Paper;
+  penOnly?: boolean;
+  highlightColor?: string;
 }
 
 export function Wordmark({
@@ -185,7 +201,17 @@ export default function DrawApp({
     files: Record<string, string>;
     view: View;
     background: string;
+    paper: Paper;
   } | null>(null);
+  const [presenting, setPresenting] = useState(false);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<number | undefined>(undefined);
+  const showToast = useCallback((text: string, ms = 2200) => {
+    setToast(text);
+    window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(null), ms);
+  }, []);
   const [shared, setShared] = useState<SharePayload | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -214,12 +240,14 @@ export default function DrawApp({
         files: editor.files,
         view: editor.state.view,
         background: editor.state.background,
+        paper: editor.state.paper,
       };
     }
     editor.load(payload, { resetHistory: true });
     editor.state = {
       ...editor.state,
       background: payload.background ?? editor.state.background,
+      paper: payload.paper ?? "none",
     };
     editor.setReadOnly(true);
     setShared(payload);
@@ -237,6 +265,7 @@ export default function DrawApp({
       ...editor.state,
       view: own?.view ?? editor.state.view,
       background: own?.background ?? editor.state.background,
+      paper: own?.paper ?? editor.state.paper,
     };
     editor.setReadOnly(false);
     if (addToBoard && shared) {
@@ -286,6 +315,9 @@ export default function DrawApp({
         view: prefs?.view ?? editor.state.view,
         style: { ...DEFAULT_STYLE, ...prefs?.style },
         toolLocked: prefs?.toolLocked ?? false,
+        paper: prefs?.paper ?? "none",
+        penOnly: prefs?.penOnly ?? false,
+        highlightColor: prefs?.highlightColor ?? editor.state.highlightColor,
       };
       if (scene?.elements?.length) editor.load(scene, { resetHistory: true });
       else editor.remeasureText();
@@ -326,13 +358,25 @@ export default function DrawApp({
     };
     const savePrefs = () => {
       if (editor.state.readOnly) return;
-      const { background, grid, view, style, toolLocked } = editor.state;
+      const {
+        background,
+        grid,
+        view,
+        style,
+        toolLocked,
+        paper,
+        penOnly,
+        highlightColor,
+      } = editor.state;
       void setItem(prefsKey, {
         background,
         grid,
         view,
         style,
         toolLocked,
+        paper,
+        penOnly,
+        highlightColor,
       } satisfies Prefs);
     };
     const unsub = editor.subscribe(() => {
@@ -385,6 +429,7 @@ export default function DrawApp({
         if (!isSceneFile(data)) throw new Error("format");
         editor.load(data);
         if (data.background) editor.setBackground(data.background);
+        if (data.paper) editor.setPaper(data.paper);
         editor.zoomToFit();
       } catch {
         window.alert(t("file.invalid"));
@@ -400,6 +445,60 @@ export default function DrawApp({
     },
     [editor, loadFile],
   );
+
+  useEffect(() => {
+    editor.onPenDetected = () => showToast(t("toast.pen"), 4500);
+    return () => {
+      editor.onPenDetected = null;
+    };
+  }, [editor, showToast, t]);
+
+  /* ── Ders modu: tam ekran, sade arayüz ── */
+  const enterPresent = useCallback(() => {
+    setMenuOpen(false);
+    setLayersOpen(false);
+    setPresenting(true);
+    if (!["freedraw", "highlighter", "laser"].includes(editor.state.tool))
+      editor.setTool("freedraw");
+    document.documentElement.requestFullscreen?.().catch(() => undefined);
+  }, [editor]);
+  const exitPresent = useCallback(() => {
+    setPresenting(false);
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined);
+  }, []);
+  useEffect(() => {
+    // Tarayıcı tam ekrandan (Esc ile) çıkarsa ders modundan da çık
+    const onFs = () => {
+      if (!document.fullscreenElement) setPresenting(false);
+    };
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
+  /* ── Pano işlemleri (sağ tık menüsü ve kısayollar) ── */
+  const notify = useCallback(
+    (ok: boolean, okKey: "toast.copied" | "toast.linkCopied" = "toast.copied") =>
+      showToast(t(ok ? okKey : "toast.copyFailed")),
+    [showToast, t],
+  );
+  const ctxActions = {
+    copyPng: () => void copyPng(editor).then((ok) => notify(ok)),
+    copySvg: () => void copySvg(editor).then((ok) => notify(ok)),
+    copyText: () => void copyText(editor.plainText()).then((ok) => notify(ok)),
+    copyLink: () =>
+      void copyShareLink(editor).then((ok) => notify(ok, "toast.linkCopied")),
+    paste: () => void pasteFromClipboard(editor),
+    cut: () => {
+      const data = editor.cutSelection();
+      if (data) void copyText(data);
+    },
+    copy: () => {
+      const data = editor.copySelection();
+      if (data) void copyText(data).then((ok) => notify(ok));
+    },
+    present: enterPresent,
+    share: () => setDialog("share"),
+  };
 
   useEffect(() => {
     editor.onRequestImage = (at) => {
@@ -430,6 +529,28 @@ export default function DrawApp({
       if (mod && e.shiftKey && key === "e") {
         e.preventDefault();
         setDialog("export");
+        return;
+      }
+      if (e.altKey && e.code === "KeyP" && !mod) {
+        e.preventDefault();
+        if (presenting) exitPresent();
+        else enterPresent();
+        return;
+      }
+      if (e.altKey && e.shiftKey && e.code === "KeyC" && !mod) {
+        e.preventDefault();
+        void copyPng(editor).then((ok) =>
+          showToast(t(ok ? "toast.copied" : "toast.copyFailed")),
+        );
+        return;
+      }
+      if (
+        e.key === "Escape" &&
+        presenting &&
+        !editor.state.selectedIds.length &&
+        !editor.state.editingId
+      ) {
+        exitPresent();
         return;
       }
       if (e.altKey && e.code === "KeyL" && !mod) {
@@ -485,7 +606,7 @@ export default function DrawApp({
       document.removeEventListener("cut", onCut);
       document.removeEventListener("paste", onPaste);
     };
-  }, [editor, dialog, menuOpen, saveFile]);
+  }, [editor, dialog, menuOpen, saveFile, presenting, enterPresent, exitPresent, showToast, t]);
 
   /* ── Menü dışına tıklayınca kapan ── */
   useEffect(() => {
@@ -503,7 +624,7 @@ export default function DrawApp({
   const hasPanel =
     editor.selectedElements().length > 0 ||
     !!state.editingId ||
-    !["select", "hand", "eraser", "image"].includes(state.tool);
+    !["select", "hand", "eraser", "image", "laser"].includes(state.tool);
   const closeMenuThen = (fn: () => void) => () => {
     setMenuOpen(false);
     fn();
@@ -512,14 +633,46 @@ export default function DrawApp({
   return (
     <I18nContext.Provider value={{ lang, t }}>
       <div
-        className={`sk-app${state.theme === "dark" ? " is-dark" : ""}${layersOpen ? " has-layers" : ""}`}
+        className={`sk-app${state.theme === "dark" ? " is-dark" : ""}${layersOpen ? " has-layers" : ""}${presenting ? " is-presenting" : ""}`}
       >
         <Board
           editor={editor}
           onDropFile={(file, at) => handleFile(file, at)}
+          onContextMenu={(x, y) => {
+            setMenuOpen(false);
+            setCtxMenu({ x, y });
+          }}
         />
 
-        <div className="sk-top">
+        {presenting && <PresentBar editor={editor} onExit={exitPresent} />}
+
+        {ctxMenu && (
+          <>
+            <div
+              className="sk-ctx-backdrop"
+              onPointerDown={() => setCtxMenu(null)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setCtxMenu(null);
+              }}
+            />
+            <ContextMenu
+              editor={editor}
+              x={ctxMenu.x}
+              y={ctxMenu.y}
+              actions={ctxActions}
+              onClose={() => setCtxMenu(null)}
+            />
+          </>
+        )}
+
+        {toast && (
+          <div className="sk-toast" role="status">
+            {toast}
+          </div>
+        )}
+
+        <div className="sk-top" hidden={presenting}>
           <div className="sk-top-left" ref={menuRef}>
             <button
               type="button"
@@ -538,6 +691,13 @@ export default function DrawApp({
                   onClick={closeMenuThen(() => setDialog("share"))}
                 >
                   <Share2 size={16} /> {t("menu.share")}
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={closeMenuThen(enterPresent)}
+                >
+                  <Presentation size={16} /> {t("menu.present")} <kbd>⌥P</kbd>
                 </button>
                 {!readOnly && (
                   <button
@@ -623,6 +783,23 @@ export default function DrawApp({
                     ))}
                   </div>
                 </div>
+                <div className="sk-menu-section">
+                  <span>{t("paper.title")}</span>
+                  <PaperPicker
+                    value={state.paper}
+                    onChange={(p) => editor.setPaper(p)}
+                  />
+                </div>
+                <button
+                  type="button"
+                  role="menuitemcheckbox"
+                  aria-checked={state.penOnly}
+                  title={t("menu.penOnlyHint")}
+                  onClick={() => editor.setPenOnly(!state.penOnly)}
+                >
+                  <PenLine size={16} /> {t("menu.penOnly")}{" "}
+                  {state.penOnly && <Check size={15} className="sk-menu-check" />}
+                </button>
                 <div className="sk-menu-section">
                   <span>{t("menu.canvas")}</span>
                   <div className="sk-menu-swatches">
@@ -737,7 +914,7 @@ export default function DrawApp({
           </div>
         </div>
 
-        {hasPanel && !readOnly && (
+        {hasPanel && !readOnly && !presenting && (
           <>
             <button
               type="button"
@@ -754,13 +931,13 @@ export default function DrawApp({
           </>
         )}
 
-        {layersOpen && !readOnly && (
+        {layersOpen && !readOnly && !presenting && (
           <div className="sk-layers-wrap">
             <LayersPanel editor={editor} onClose={() => setLayersOpen(false)} />
           </div>
         )}
 
-        <div className="sk-bottom-left">
+        <div className="sk-bottom-left" hidden={presenting}>
           <div className="sk-group sk-glass">
             <button
               type="button"
@@ -809,7 +986,7 @@ export default function DrawApp({
           </div>
         </div>
 
-        <div className="sk-bottom-right">
+        <div className="sk-bottom-right" hidden={presenting}>
           <button
             type="button"
             className="sk-icon-btn sk-glass"
@@ -820,7 +997,7 @@ export default function DrawApp({
           </button>
         </div>
 
-        {empty && (
+        {empty && !presenting && (
           <div className="sk-welcome">
             {brand ?? <Wordmark />}
             <p>{t("welcome.text")}</p>

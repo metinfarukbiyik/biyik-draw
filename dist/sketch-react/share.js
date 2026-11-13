@@ -4,6 +4,7 @@ function compactJson(p) {
     return JSON.stringify({
         v: 1,
         b: p.background,
+        p: p.paper && p.paper !== 'none' ? p.paper : undefined,
         e: p.elements.map((el) => {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { version, ...rest } = el;
@@ -56,6 +57,7 @@ export async function decodeShare(hash) {
             elements: json.e.map((el) => ({ ...el, version: 1 })),
             files: json.f ?? {},
             background: json.b,
+            paper: json.p,
         };
     }
     catch {

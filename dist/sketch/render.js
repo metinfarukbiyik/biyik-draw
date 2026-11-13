@@ -1,3 +1,4 @@
+import { drawPaper, paperSvg } from './paper.js';
 import { generateOps, isShape } from './shapes.js';
 import { themed, SELECTION_COLOR } from './colors.js';
 import { boundsIntersect, commonBounds, elementBounds } from './geometry.js';
@@ -98,6 +99,8 @@ function drawTextLines(ctx, lines, el, font, boxWidth, top, left = 0) {
     const x = el.textAlign === 'left' ? left : el.textAlign === 'right' ? left + boxWidth : left + boxWidth / 2;
     lines.forEach((line, i) => ctx.fillText(line, x, top + i * lh + lh / 2));
 }
+/** Fosforlu kalemin ekrandaki kalınlığı. */
+export const highlightWidth = (el) => 10 + el.strokeWidth * 4;
 export function drawElement(ctx, el, theme, images, files, alpha = 1) {
     ctx.save();
     ctx.globalAlpha = (el.opacity / 100) * alpha;
@@ -162,6 +165,20 @@ export function drawElement(ctx, el, theme, images, files, alpha = 1) {
                     ctx.setLineDash([]);
                     ctx.strokeStyle = stroke;
                     ctx.lineWidth = el.strokeWidth * 1.6;
+                    ctx.stroke(path);
+                    break;
+                case 'freeFill':
+                    ctx.fillStyle = stroke;
+                    ctx.fill(path);
+                    break;
+                case 'highlight':
+                    // Fosforlu kalem: açık temada çarpma karışımı, alttaki yazı koyu kalır
+                    ctx.setLineDash([]);
+                    ctx.globalAlpha *= theme === 'light' ? 0.55 : 0.38;
+                    if (theme === 'light')
+                        ctx.globalCompositeOperation = 'multiply';
+                    ctx.strokeStyle = el.strokeColor;
+                    ctx.lineWidth = highlightWidth(el);
                     ctx.stroke(path);
                     break;
             }
@@ -282,6 +299,14 @@ export function renderScene(ctx, elements, overlay, opts) {
     ctx.fillRect(0, 0, opts.width, opts.height);
     ctx.scale(zoom, zoom);
     ctx.translate(scrollX, scrollY);
+    const visible = [
+        -scrollX,
+        -scrollY,
+        -scrollX + opts.width / zoom,
+        -scrollY + opts.height / zoom,
+    ];
+    if (opts.paper && opts.paper !== 'none')
+        drawPaper(ctx, opts.paper, visible, opts.theme, 1 / zoom, zoom);
     if (opts.grid)
         drawGrid(ctx, opts);
     const viewport = [-scrollX, -scrollY, -scrollX + opts.width / zoom, -scrollY + opts.height / zoom];
@@ -295,8 +320,37 @@ export function renderScene(ctx, elements, overlay, opts) {
         drawElement(ctx, shown, opts.theme, opts.images, opts.files, overlay.erasing.has(el.id) ? 0.25 : 1);
     }
     drawOverlay(ctx, overlay, zoom);
+    if (overlay.laser?.length)
+        drawLaser(ctx, overlay.laser, zoom);
 }
-export async function exportToCanvas(elements, files, { background, theme, scale, padding = 24 }) {
+/** Lazer işaretçi: parlak kırmızı, giderek incelip sönen iz. */
+function drawLaser(ctx, pts, zoom) {
+    const px = 1 / zoom;
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = 'rgba(239,68,68,0.8)';
+    ctx.shadowBlur = 12;
+    for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1];
+        const b = pts[i];
+        ctx.strokeStyle = `rgba(239,68,68,${b.life})`;
+        ctx.lineWidth = (2 + 4 * b.life) * px;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+    }
+    const head = pts[pts.length - 1];
+    if (head.life > 0.6) {
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(head.x, head.y, 3 * px, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+}
+export async function exportToCanvas(elements, files, { background, theme, scale, padding = 24, paper = 'none' }) {
     const canvas = document.createElement('canvas');
     const bounds = commonBounds(elements) ?? [0, 0, 100, 100];
     const width = bounds[2] - bounds[0] + padding * 2;
@@ -312,6 +366,8 @@ export async function exportToCanvas(elements, files, { background, theme, scale
         ctx.fillRect(0, 0, width, height);
     }
     ctx.translate(padding - bounds[0], padding - bounds[1]);
+    if (paper !== 'none')
+        drawPaper(ctx, paper, [bounds[0] - padding, bounds[1] - padding, bounds[2] + padding, bounds[3] + padding], theme, 1, 1);
     for (const el of elements)
         drawElement(ctx, el, theme, images, files);
     return canvas;
@@ -326,7 +382,7 @@ function svgTextLines(lines, el, color, boxWidth, top, left) {
         .map((line, i) => `<text x="${x}" y="${top + i * lh + lh / 2}" font-family="${family}" font-size="${el.fontSize}" fill="${color}" text-anchor="${anchor}" dominant-baseline="central" style="white-space:pre">${esc(line)}</text>`)
         .join('');
 }
-export function exportToSvg(elements, files, { background, theme, padding = 24 }) {
+export function exportToSvg(elements, files, { background, theme, padding = 24, paper = 'none' }) {
     const bounds = commonBounds(elements) ?? [0, 0, 100, 100];
     const width = bounds[2] - bounds[0] + padding * 2;
     const height = bounds[3] - bounds[1] + padding * 2;
@@ -335,6 +391,8 @@ export function exportToSvg(elements, files, { background, theme, padding = 24 }
     const parts = [];
     if (background)
         parts.push(`<rect width="100%" height="100%" fill="${themed(background, theme)}"/>`);
+    if (paper !== 'none')
+        parts.push(paperSvg(paper, [bounds[0] - padding, bounds[1] - padding, bounds[2] + padding, bounds[3] + padding], theme, ox, oy));
     for (const el of elements) {
         const stroke = themed(el.strokeColor, theme);
         const bg = themed(el.backgroundColor, theme);
@@ -365,6 +423,10 @@ export function exportToSvg(elements, files, { background, theme, padding = 24 }
                     inner += `<path ${base} fill="none" stroke="${stroke}" stroke-width="${el.strokeWidth}"/>`;
                 else if (op.mode === 'free')
                     inner += `<path ${base} fill="none" stroke="${stroke}" stroke-width="${el.strokeWidth * 1.6}"/>`;
+                else if (op.mode === 'freeFill')
+                    inner += `<path d="${op.d}" fill="${stroke}" stroke="none"/>`;
+                else if (op.mode === 'highlight')
+                    inner += `<path ${base} fill="none" stroke="${el.strokeColor}" stroke-width="${highlightWidth(el)}" stroke-opacity="${theme === 'light' ? 0.55 : 0.38}" style="mix-blend-mode:${theme === 'light' ? 'multiply' : 'normal'}"/>`;
             }
             if (isShape(el) && el.text) {
                 const { lines } = labelLines(el);

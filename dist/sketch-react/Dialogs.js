@@ -48,10 +48,17 @@ export function ExportDialog({ editor, onClose }) {
     const [withBackground, setWithBackground] = useState(true);
     const [dark, setDark] = useState(editor.state.theme === 'dark');
     const [scale, setScale] = useState(2);
+    const hasPaper = editor.state.paper !== 'none';
+    const [withPaper, setWithPaper] = useState(hasPaper);
     const [preview, setPreview] = useState(null);
     const [status, setStatus] = useState('');
     const elements = onlySelected && hasSelection ? editor.selectedElements() : editor.visibleElements();
-    const options = { background: withBackground ? editor.state.background : null, theme: dark ? 'dark' : 'light', scale };
+    const options = {
+        background: withBackground ? editor.state.background : null,
+        theme: dark ? 'dark' : 'light',
+        scale,
+        paper: withPaper ? editor.state.paper : 'none',
+    };
     useEffect(() => {
         let cancelled = false;
         if (!elements.length)
@@ -64,7 +71,7 @@ export function ExportDialog({ editor, onClose }) {
             cancelled = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [onlySelected, withBackground, dark]);
+    }, [onlySelected, withBackground, dark, withPaper]);
     const png = async () => {
         const canvas = await exportToCanvas(elements, editor.files, options);
         download(canvas.toDataURL('image/png'), `${fileStamp(t('file.name'))}.png`);
@@ -96,7 +103,7 @@ export function ExportDialog({ editor, onClose }) {
     };
     return (_jsx(Dialog, { title: t('export.title'), onClose: onClose, wide: true, children: !elements.length ? (_jsx("p", { className: "sk-muted", children: t('export.empty') })) : (_jsxs("div", { className: "sk-export", children: [_jsx("div", { className: `sk-export-preview${withBackground ? '' : ' is-checker'}`, children: preview ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    _jsx("img", { src: preview, alt: t('export.preview') })) : (_jsx("span", { className: "sk-muted", children: t('export.preparing') })) }), _jsxs("div", { className: "sk-export-options", children: [hasSelection && (_jsxs("label", { className: "sk-check", children: [_jsx("input", { type: "checkbox", checked: onlySelected, onChange: (e) => setOnlySelected(e.target.checked) }), t('export.onlySelected')] })), _jsxs("label", { className: "sk-check", children: [_jsx("input", { type: "checkbox", checked: withBackground, onChange: (e) => setWithBackground(e.target.checked) }), t('export.background')] }), _jsxs("label", { className: "sk-check", children: [_jsx("input", { type: "checkbox", checked: dark, onChange: (e) => setDark(e.target.checked) }), t('export.dark')] }), _jsxs("div", { className: "sk-scale", role: "group", "aria-label": t('export.scale'), children: [_jsx("span", { children: t('export.scale') }), [1, 2, 3].map((s) => (_jsxs("button", { type: "button", className: "sk-opt", "aria-pressed": scale === s, onClick: () => setScale(s), children: [s, "\u00D7"] }, s)))] }), _jsxs("div", { className: "sk-export-actions", children: [_jsxs("button", { type: "button", className: "sk-btn is-primary", onClick: png, children: [_jsx(Download, { size: 15 }), " PNG"] }), _jsxs("button", { type: "button", className: "sk-btn", onClick: svg, children: [_jsx(Download, { size: 15 }), " SVG"] }), _jsxs("button", { type: "button", className: "sk-btn", onClick: copy, children: [_jsx(ClipboardCopy, { size: 15 }), " ", t('export.copy')] })] }), status && (_jsx("p", { className: "sk-muted", role: "status", children: status }))] })] })) }));
+                    _jsx("img", { src: preview, alt: t('export.preview') })) : (_jsx("span", { className: "sk-muted", children: t('export.preparing') })) }), _jsxs("div", { className: "sk-export-options", children: [hasSelection && (_jsxs("label", { className: "sk-check", children: [_jsx("input", { type: "checkbox", checked: onlySelected, onChange: (e) => setOnlySelected(e.target.checked) }), t('export.onlySelected')] })), _jsxs("label", { className: "sk-check", children: [_jsx("input", { type: "checkbox", checked: withBackground, onChange: (e) => setWithBackground(e.target.checked) }), t('export.background')] }), _jsxs("label", { className: "sk-check", children: [_jsx("input", { type: "checkbox", checked: dark, onChange: (e) => setDark(e.target.checked) }), t('export.dark')] }), hasPaper && (_jsxs("label", { className: "sk-check", children: [_jsx("input", { type: "checkbox", checked: withPaper, onChange: (e) => setWithPaper(e.target.checked) }), t('export.paper')] })), _jsxs("div", { className: "sk-scale", role: "group", "aria-label": t('export.scale'), children: [_jsx("span", { children: t('export.scale') }), [1, 2, 3].map((s) => (_jsxs("button", { type: "button", className: "sk-opt", "aria-pressed": scale === s, onClick: () => setScale(s), children: [s, "\u00D7"] }, s)))] }), _jsxs("div", { className: "sk-export-actions", children: [_jsxs("button", { type: "button", className: "sk-btn is-primary", onClick: png, children: [_jsx(Download, { size: 15 }), " PNG"] }), _jsxs("button", { type: "button", className: "sk-btn", onClick: svg, children: [_jsx(Download, { size: 15 }), " SVG"] }), _jsxs("button", { type: "button", className: "sk-btn", onClick: copy, children: [_jsx(ClipboardCopy, { size: 15 }), " ", t('export.copy')] })] }), status && (_jsx("p", { className: "sk-muted", role: "status", children: status }))] })] })) }));
 }
 const mod = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
 const shortcuts = (t) => [
@@ -115,6 +122,8 @@ const shortcuts = (t) => [
             [t('tool.text'), 'T · 8'],
             [t('type.image'), '9'],
             [t('tool.eraser'), 'E · 0'],
+            [t('tool.highlighter'), 'M'],
+            [t('tool.laser'), 'K'],
             [t('help.lockTool'), 'Q'],
         ],
     ],
@@ -148,6 +157,8 @@ const shortcuts = (t) => [
             [t('help.fitSel'), '⇧ 2'],
             [t('menu.grid'), `${mod} '`],
             [t('menu.layers'), '⌥ L'],
+            [t('menu.present'), '⌥ P'],
+            [t('ctx.copyPng'), '⇧ ⌥ C'],
             [t('help.saveOpen'), `${mod} S / ${mod} O`],
             [t('top.export'), `${mod} ⇧ E`],
             [t('menu.shortcuts'), '?'],
@@ -188,7 +199,7 @@ export function ShareDialog({ editor, onClose }) {
         for (const el of elements)
             if (el.fileId && editor.files[el.fileId])
                 files[el.fileId] = editor.files[el.fileId];
-        return { elements, files, background: editor.state.background };
+        return { elements, files, background: editor.state.background, paper: editor.state.paper };
     };
     useEffect(() => {
         let cancelled = false;

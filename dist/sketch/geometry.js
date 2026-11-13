@@ -94,7 +94,7 @@ export function hitTest(el, p, tolerance) {
         return distToPolyline(local, linearSamplePoints(el)) <= tol;
     }
     if (el.type === 'freedraw') {
-        return distToPolyline(local, el.points ?? []) <= tol + el.strokeWidth;
+        return distToPolyline(local, el.points ?? []) <= tol + el.strokeWidth + (el.highlight ? 8 + el.strokeWidth * 2 : 0);
     }
     // Metin ve görsel: kutunun içi
     return x >= -tol && y >= -tol && x <= el.width + tol && y <= el.height + tol;

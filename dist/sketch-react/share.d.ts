@@ -4,11 +4,12 @@
  *
  *   https://draw.biyik.dev/#share=1.<base64url(deflate(json))>
  */
-import type { Files, SketchElement } from '../sketch/index.js';
+import type { Files, Paper, SketchElement } from '../sketch/index.js';
 export interface SharePayload {
     elements: SketchElement[];
     files: Files;
     background?: string;
+    paper?: Paper;
 }
 /** Sahneyi adres parçasına (# sonrası) çevirir. */
 export declare function encodeShare(payload: SharePayload): Promise<string>;

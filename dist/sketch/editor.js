@@ -42,6 +42,9 @@ export class Editor {
             theme: 'light',
             background: '#ffffff',
             grid: false,
+            paper: 'none',
+            penOnly: false,
+            highlightColor: '#facc15',
             view: { zoom: 1, scrollX: 0, scrollY: 0 },
             viewport: { width: 0, height: 0 },
             readOnly: false,
@@ -60,6 +63,14 @@ export class Editor {
         this.coalesceAt = 0;
         this.drag = null;
         this.dragSnapshot = null;
+        /** Sürüklemeyi başlatan işaretçi: diğer parmaklar/avuç içi ona karışmaz. */
+        this.dragPointer = null;
+        /** Kalem ilk kez algılanınca çağrılır (avuç içi koruması otomatik açıldı). */
+        this.onPenDetected = null;
+        this.penSeen = false;
+        /** Lazer izinin noktaları (dünya koordinatı + zaman). */
+        this.laser = [];
+        this.laserFrame = 0;
         this.editSnapshot = null;
         this.pending = null;
         this.pointers = new Map();
@@ -79,6 +90,12 @@ export class Editor {
         /** Görünüm henüz ölçülmeden istenen sığdırma, ölçü gelince uygulanır. */
         this.pendingFit = null;
         this.copiedStyle = null;
+        this.tickLaser = () => {
+            const now = performance.now();
+            this.laser = this.laser.filter((pt) => now - pt.t < Editor.LASER_MS);
+            this.emit();
+            this.laserFrame = this.laser.length ? requestAnimationFrame(this.tickLaser) : 0;
+        };
     }
     emit(sceneChanged = false) {
         this.version++;
@@ -299,6 +316,7 @@ export class Editor {
             elements: this.elements,
             files,
             background: this.state.background,
+            paper: this.state.paper,
         };
     }
     /** Yazı tipleri yüklendikten sonra metin kutularını yeniden ölçer. */
@@ -574,6 +592,113 @@ export class Editor {
         if (!ids.size)
             return;
         this.commit(this.elements.map((el) => (ids.has(el.id) ? bump(el, { x: el.x + dx, y: el.y + dy, ...keepBindings(el, ids) }) : el)), 'nudge');
+    }
+    /* ───────────── Bağlam menüsü işlemleri ───────────── */
+    /** Sağ tık/uzun basma: tıklanan öğe seçili değilse onu seçer; boşlukta seçimi temizler. */
+    selectAt(sx, sy) {
+        const world = this.toWorld(sx, sy);
+        this.pointerWorld = world;
+        if (this.state.readOnly)
+            return;
+        const hit = this.hitElement(world) ?? this.textTargetAt(world);
+        if (!hit) {
+            if (this.state.selectedIds.length)
+                this.setState({ selectedIds: [] });
+            return;
+        }
+        if (!this.state.selectedIds.includes(hit.id))
+            this.setState({ tool: 'select', selectedIds: this.expandGroups([hit.id]) });
+    }
+    /** Seçimde bir metin ve bir şekil varsa: metin şeklin etiketi olur. */
+    canBindText() {
+        const sel = this.selectedElements();
+        return sel.length === 2 && sel.some((el) => el.type === 'text') && sel.some((el) => isShape(el));
+    }
+    bindTextToContainer() {
+        if (!this.canBindText())
+            return;
+        const sel = this.selectedElements();
+        const text = sel.find((el) => el.type === 'text');
+        const shape = sel.find((el) => isShape(el));
+        const label = [shape.text, text.text].filter((v) => v && v.trim()).join('\n');
+        const next = this.elements
+            .filter((el) => el.id !== text.id)
+            .map((el) => el.id === shape.id
+            ? bump(el, {
+                text: label,
+                fontSize: text.fontSize,
+                fontFamily: text.fontFamily,
+                textAlign: 'center',
+                strokeColor: el.text ? el.strokeColor : text.strokeColor,
+            })
+            : el);
+        this.commit(next);
+        this.setState({ selectedIds: [shape.id] });
+    }
+    canWrapText() {
+        const sel = this.selectedElements();
+        return sel.length > 0 && sel.every((el) => el.type === 'text');
+    }
+    /** Seçili metinleri, metni etiket olarak taşıyan dikdörtgenlere dönüştürür. */
+    wrapTextInContainer() {
+        if (!this.canWrapText())
+            return;
+        const ids = new Set(this.state.selectedIds);
+        const created = [];
+        const next = this.elements.map((el) => {
+            if (!ids.has(el.id))
+                return el;
+            const padX = 28;
+            const padY = 20;
+            const box = this.newElement('rectangle', [el.x - padX, el.y - padY], {
+                width: el.width + padX * 2,
+                height: el.height + padY * 2,
+                angle: el.angle,
+                text: el.text,
+                fontSize: el.fontSize,
+                fontFamily: el.fontFamily,
+                strokeColor: el.strokeColor,
+                textAlign: 'center',
+                groupId: el.groupId ?? null,
+            });
+            created.push(box.id);
+            return box;
+        });
+        this.commit(next);
+        this.setState({ selectedIds: created });
+    }
+    /** Seçimin çevresine bir çerçeve çizer ve hepsini gruplar. */
+    wrapSelectionInFrame() {
+        const sel = this.selectedElements();
+        const b = commonBounds(sel);
+        if (!b)
+            return;
+        const pad = 28;
+        const frame = this.newElement('rectangle', [b[0] - pad, b[1] - pad], {
+            width: b[2] - b[0] + pad * 2,
+            height: b[3] - b[1] + pad * 2,
+            backgroundColor: 'transparent',
+            strokeStyle: 'dashed',
+            strokeColor: this.state.style.strokeColor,
+            text: '',
+            name: 'Çerçeve',
+        });
+        const groupId = randomId();
+        const ids = new Set(sel.map((el) => el.id));
+        const first = this.elements.findIndex((el) => ids.has(el.id));
+        const next = this.elements.map((el) => (ids.has(el.id) ? bump(el, { groupId }) : el));
+        next.splice(first, 0, { ...frame, groupId });
+        this.commit(next);
+        this.setState({ selectedIds: [frame.id, ...ids] });
+    }
+    /** Seçimdeki (yoksa tüm) metinler: metin öğeleri ve şekil etiketleri, yukarıdan aşağıya. */
+    plainText() {
+        const els = this.state.selectedIds.length ? this.selectedElements() : this.visibleElements();
+        return els
+            .filter((el) => el.text && el.text.trim())
+            .sort((a, b) => a.y - b.y || a.x - b.x)
+            .map((el) => el.text.trim())
+            .join('\n\n');
     }
     /* ───────────── Pano ───────────── */
     copySelection() {
@@ -852,13 +977,28 @@ export class Editor {
             hovered: !d && this.hoverId && !this.state.selectedIds.includes(this.hoverId) ? this.getElement(this.hoverId) : null,
             erasing: this.erasing,
             bindTarget: this.getElement(this.bindTarget),
+            laser: this.laser.length ? this.laserTrail() : undefined,
             editingId: this.state.editingId,
         };
     }
     /* ───────────── İşaretçi ───────────── */
     pointerDown(p) {
         this.pointerType = p.type;
+        if (p.type === 'pen' && !this.penSeen) {
+            // İlk kalem dokunuşu: avuç içi korumasını aç
+            this.penSeen = true;
+            if (!this.state.penOnly) {
+                this.state = { ...this.state, penOnly: true };
+                this.onPenDetected?.();
+            }
+        }
+        // Kalemle çizerken değen avuç içi ya da parmak yok sayılır
+        if (p.type === 'touch' && this.state.penOnly && this.drag && this.dragPointer !== null && this.pointerType !== 'touch')
+            return;
+        if (p.type === 'touch' && this.state.penOnly && this.drag && this.drag.kind !== 'pan' && this.drag.kind !== 'pinch')
+            return;
         this.pointers.set(p.id, [p.x, p.y]);
+        this.dragPointer = p.id;
         const world = this.toWorld(p.x, p.y);
         this.pointerWorld = world;
         if (this.pointers.size === 2) {
@@ -875,7 +1015,8 @@ export class Editor {
         }
         if (this.pointers.size > 2)
             return;
-        if (this.state.readOnly) {
+        // Salt okunur görünümde ve avuç içi korumasında parmak yalnızca kaydırır
+        if (this.state.readOnly || (p.type === 'touch' && this.state.penOnly && this.state.tool !== 'select')) {
             const { scrollX, scrollY } = this.state.view;
             this.drag = { kind: 'pan', sx: p.x, sy: p.y, scrollX, scrollY };
             this.cursor = 'grabbing';
@@ -912,12 +1053,23 @@ export class Editor {
             case 'line':
             case 'arrow':
                 return this.linearDown(p, world, tool);
-            case 'freedraw': {
-                const el = this.newElement('freedraw', world, { points: [[0, 0]] });
-                this.drag = { kind: 'freedraw', id: el.id, world: [world] };
+            case 'freedraw':
+            case 'highlighter': {
+                const highlight = tool === 'highlighter';
+                const pressures = p.type === 'pen' && !highlight ? [p.pressure || 0.5] : null;
+                const el = this.newElement('freedraw', world, {
+                    points: [[0, 0]],
+                    ...(highlight ? { highlight: true, strokeColor: this.state.highlightColor, opacity: 100 } : {}),
+                    ...(pressures ? { pressures } : {}),
+                });
+                this.drag = { kind: 'freedraw', id: el.id, world: [world], pressures };
                 this.setElementsLive([...this.elements, el]);
                 return;
             }
+            case 'laser':
+                this.drag = { kind: 'laser' };
+                this.addLaserPoint(world);
+                return;
             case 'text': {
                 const target = this.textTargetAt(world);
                 if (target)
@@ -1053,12 +1205,15 @@ export class Editor {
         this.emit(true);
     }
     pointerMove(p) {
-        this.pointerType = p.type;
         if (this.pointers.has(p.id))
             this.pointers.set(p.id, [p.x, p.y]);
+        const d = this.drag;
+        // Sürüklemeyi başlatmayan işaretçi (ör. avuç içi) çizimi etkilemez
+        if (d && d.kind !== 'pinch' && this.dragPointer !== null && p.id !== this.dragPointer)
+            return;
+        this.pointerType = p.type;
         const world = this.toWorld(p.x, p.y);
         this.pointerWorld = world;
-        const d = this.drag;
         if (!d) {
             if (this.pending) {
                 const el = this.getElement(this.pending.id);
@@ -1151,9 +1306,18 @@ export class Editor {
                 if (Math.hypot(world[0] - last[0], world[1] - last[1]) * this.state.view.zoom < 1.5)
                     return;
                 d.world.push(world);
-                this.setElementsLive(this.replace([bump(el, rebuildFromWorldPoints({ ...el, angle: 0 }, d.world))]));
+                d.pressures?.push(p.pressure || 0.5);
+                this.setElementsLive(this.replace([
+                    bump(el, {
+                        ...rebuildFromWorldPoints({ ...el, angle: 0 }, d.world),
+                        ...(d.pressures ? { pressures: [...d.pressures] } : {}),
+                    }),
+                ]));
                 return;
             }
+            case 'laser':
+                this.addLaserPoint(world);
+                return;
             case 'move': {
                 let dx = world[0] - d.start[0];
                 let dy = world[1] - d.start[1];
@@ -1254,6 +1418,9 @@ export class Editor {
         const d = this.drag;
         if (!d)
             return;
+        if (d.kind !== 'pinch' && this.dragPointer !== null && p.id !== this.dragPointer)
+            return;
+        this.dragPointer = null;
         if (d.kind === 'pinch') {
             if (this.pointers.size === 0)
                 this.drag = null;
@@ -1299,6 +1466,9 @@ export class Editor {
             case 'freedraw':
                 this.commitDrag();
                 break;
+            case 'laser':
+                this.dragSnapshot = null;
+                return;
             case 'erase': {
                 if (this.erasing.size) {
                     const ids = this.erasing;
@@ -1315,9 +1485,43 @@ export class Editor {
         this.emit(true);
     }
     pointerCancel(p) {
+        // Sürüklemeyi başlatan işaretçi iptal olursa çizimi yarıda bırakma, bitir
+        if (this.drag && this.drag.kind !== 'pinch' && p.id === this.dragPointer)
+            return this.pointerUp(p);
         this.pointers.delete(p.id);
         if (this.pointers.size === 0 && this.drag?.kind === 'pinch')
             this.drag = null;
+    }
+    /** Uzun basma ile bağlam menüsü açılınca devam eden hareketi geri al. */
+    cancelGesture() {
+        this.pointers.clear();
+        this.dragPointer = null;
+        this.cancelDrag();
+    }
+    addLaserPoint([x, y]) {
+        this.laser.push({ x, y, t: performance.now() });
+        if (!this.laserFrame)
+            this.laserFrame = requestAnimationFrame(this.tickLaser);
+    }
+    /** Lazer izi: nokta ve 0–1 arası tazelik (1 en yeni). */
+    laserTrail() {
+        const now = performance.now();
+        return this.laser.map((pt) => ({ x: pt.x, y: pt.y, life: Math.max(0, 1 - (now - pt.t) / Editor.LASER_MS) }));
+    }
+    /* ───────────── Öğretmen ayarları ───────────── */
+    setPaper(paper) {
+        this.setState({ paper });
+        this.emit(true);
+    }
+    setPenOnly(penOnly) {
+        this.setState({ penOnly });
+    }
+    setHighlightColor(highlightColor) {
+        this.setState({ highlightColor });
+        const ids = new Set(this.state.selectedIds);
+        if (ids.size && this.selectedElements().every((el) => el.highlight)) {
+            this.commit(this.elements.map((el) => (ids.has(el.id) ? bump(el, { strokeColor: highlightColor }) : el)), 'hl');
+        }
     }
     endCreation(id) {
         this.commitDrag();
@@ -1630,6 +1834,8 @@ export class Editor {
             '9': 'image',
             e: 'eraser',
             '0': 'eraser',
+            m: 'highlighter',
+            k: 'laser',
         };
         const tool = tools[key];
         if (tool)
@@ -1639,6 +1845,8 @@ export class Editor {
         return false;
     }
 }
+/* ───────────── Lazer işaretçi ───────────── */
+Editor.LASER_MS = 900;
 /* ───────────── Yardımcılar ───────────── */
 /** Tuvalde seçilebilir ve düzenlenebilir mi? */
 const interactive = (el) => !!el && !el.hidden && !el.locked;

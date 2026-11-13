@@ -11,6 +11,8 @@ A whiteboard with a hand-drawn look that runs entirely in the browser. The drawi
 - **Arrows that stick:** drop an arrow end on a shape and it stays bound when the shape moves, resizes or rotates
 - **Layers panel:** reorder by dragging, rename, hide, lock, collapsible groups
 - **Editing:** multi-select, resize, rotate, flip, align, distribute, copy/paste (including style), undo/redo
+- **Context menu:** right-click, or press and hold on touch: copy as PNG/SVG/text, bind text to a shape, wrap text in a box, wrap in a frame, layer order and more
+- **For teachers and tablets:** teaching mode (full screen, big buttons), grid, dotted, lined and handwriting paper, highlighter, laser pointer, pen pressure and palm rejection
 - **Share:** a link that carries the drawing itself (nothing is uploaded), read-only view with “Add to my board”, and an offline HTML file
 - **Export:** PNG, SVG (fonts embedded) or clipboard; save and open `.biyikdraw` files
 - **Built in:** autosave to IndexedDB, dark theme, mobile and touch (pinch to zoom), Turkish and English UI
@@ -86,6 +88,17 @@ Every color is a CSS variable on `.sk-app`. Override them to match your design:
   --sk-font: 'Inter', system-ui, sans-serif;
 }
 ```
+
+## For teachers and tablets
+
+Built for teaching from a tablet and mirroring to a projector or smart board:
+
+- **Teaching mode** (`⌥P`): full screen with big touch buttons for pen, highlighter, laser, eraser, colors, widths, paper, undo and new page.
+- **Paper patterns:** grid, dotted, lined and handwriting paper (the four-line guide). Set it with `editor.setPaper('guide')`.
+- **Highlighter** (`M`) and **laser pointer** (`K`).
+- **Pen pressure** and **palm rejection:** once a pen is detected, touch only pans and zooms (`editor.setPenOnly(false)` turns it off).
+
+![Teaching mode](docs/images/en-teach.webp)
 
 ## Sharing and offline
 

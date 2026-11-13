@@ -9,6 +9,7 @@ import {
   ellipsePath,
   freehandPath,
   hatchSegments,
+  pressureOutline,
   polylinePath,
   roundedPolygonOutline,
   roundedPolygonPath,
@@ -32,7 +33,11 @@ export type DrawMode =
   /** Kontur rengiyle, ok ucunun yalnızca çizgisi (düz stil). */
   | 'headStroke'
   /** Serbest çizim izi. */
-  | 'free';
+  | 'free'
+  /** Basınçlı serbest çizim: kontur renginde dolgu. */
+  | 'freeFill'
+  /** Fosforlu kalem: yarı saydam, geniş iz. */
+  | 'highlight';
 
 export interface DrawOp {
   d: string;
@@ -194,8 +199,13 @@ export function generateOps(el: SketchElement): DrawOp[] {
     case 'line':
     case 'arrow':
       return linearOps(el, r);
-    case 'freedraw':
-      return [{ d: freehandPath(el.points ?? []), mode: 'free' }];
+    case 'freedraw': {
+      const pts = el.points ?? [];
+      if (!el.highlight && el.pressures && el.pressures.length === pts.length && pts.length) {
+        return [{ d: pressureOutline(pts, el.pressures, el.strokeWidth * 2.2), mode: 'freeFill' }];
+      }
+      return [{ d: freehandPath(pts), mode: el.highlight ? 'highlight' : 'free' }];
+    }
     default:
       return [];
   }

@@ -1,5 +1,5 @@
 import { createRng } from './random.js';
-import { ellipseOutline, ellipsePath, freehandPath, hatchSegments, polylinePath, roundedPolygonOutline, roundedPolygonPath, sketchCurve, sketchEllipsePoints, sketchLine, sketchPolygon, sketchRoundedPolygon, sketchSegment, } from './rough.js';
+import { ellipseOutline, ellipsePath, freehandPath, hatchSegments, pressureOutline, polylinePath, roundedPolygonOutline, roundedPolygonPath, sketchCurve, sketchEllipsePoints, sketchLine, sketchPolygon, sketchRoundedPolygon, sketchSegment, } from './rough.js';
 const SHAPE_RADIUS = 24;
 export const isShape = (el) => el.type === 'rectangle' || el.type === 'diamond' || el.type === 'ellipse' || el.type === 'triangle';
 /** Köşeli şekiller (köşe stili seçilebilir). */
@@ -156,8 +156,13 @@ export function generateOps(el) {
         case 'line':
         case 'arrow':
             return linearOps(el, r);
-        case 'freedraw':
-            return [{ d: freehandPath(el.points ?? []), mode: 'free' }];
+        case 'freedraw': {
+            const pts = el.points ?? [];
+            if (!el.highlight && el.pressures && el.pressures.length === pts.length && pts.length) {
+                return [{ d: pressureOutline(pts, el.pressures, el.strokeWidth * 2.2), mode: 'freeFill' }];
+            }
+            return [{ d: freehandPath(pts), mode: el.highlight ? 'highlight' : 'free' }];
+        }
         default:
             return [];
     }

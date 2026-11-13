@@ -15,7 +15,11 @@ export type DrawMode =
 /** Kontur rengiyle, ok ucunun yalnızca çizgisi (düz stil). */
  | 'headStroke'
 /** Serbest çizim izi. */
- | 'free';
+ | 'free'
+/** Basınçlı serbest çizim: kontur renginde dolgu. */
+ | 'freeFill'
+/** Fosforlu kalem: yarı saydam, geniş iz. */
+ | 'highlight';
 export interface DrawOp {
     d: string;
     mode: DrawMode;

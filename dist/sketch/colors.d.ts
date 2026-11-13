@@ -2,6 +2,8 @@
 import type { Theme } from './types.js';
 export declare const STROKE_COLORS: string[];
 export declare const BACKGROUND_COLORS: string[];
+/** Fosforlu kalem renkleri. */
+export declare const HIGHLIGHT_COLORS: string[];
 export declare const CANVAS_COLORS: string[];
 export declare const SELECTION_COLOR = "#3b82f6";
 /**

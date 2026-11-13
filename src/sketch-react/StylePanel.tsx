@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import {
   BACKGROUND_COLORS,
+  HIGHLIGHT_COLORS,
   STROKE_COLORS,
   type Arrowhead,
   type Editor,
@@ -47,6 +48,7 @@ const TOOL_TYPE: Partial<Record<Tool, ElementType>> = {
   arrow: 'arrow',
   line: 'line',
   freedraw: 'freedraw',
+  highlighter: 'freedraw',
   text: 'text',
 };
 
@@ -158,7 +160,12 @@ function Swatches({
   const { t } = useI18n();
   const noFill = t('style.noFill');
   return (
-    <div className="sk-swatches" role="group" aria-label={label}>
+    <div
+      className="sk-swatches"
+      role="group"
+      aria-label={label}
+      style={{ gridTemplateColumns: `repeat(${colors.length}, minmax(0, 1fr)) 1px minmax(0, 1fr)` }}
+    >
       {colors.map((c) => (
         <button
           key={c}
@@ -198,7 +205,9 @@ export default function StylePanel({ editor }: { editor: Editor }) {
   if (!targets.length && !toolType) return null;
 
   const types = new Set<ElementType>(targets.length ? targets.map((t) => t.type) : [toolType!]);
-  const v: StyleProps = targets[0] ?? state.style;
+  // Fosforlu kalem: kendi renk paleti ve rengi
+  const highlightMode = targets.length ? targets.every((el) => el.highlight) : state.tool === 'highlighter';
+  const v: StyleProps = targets[0] ?? (highlightMode ? { ...state.style, strokeColor: state.highlightColor } : state.style);
   const set = (patch: Partial<StyleProps>) => editor.setStyle(patch);
   const has = (...t: ElementType[]) => t.some((x) => types.has(x));
   const onlyImages = types.size === 1 && types.has('image');
@@ -222,7 +231,12 @@ export default function StylePanel({ editor }: { editor: Editor }) {
       {!onlyImages && (
         <Section>
           <Field label={t('style.stroke')} value={v.strokeColor.toUpperCase()}>
-            <Swatches colors={STROKE_COLORS} value={v.strokeColor} onChange={(c) => set({ strokeColor: c })} label={t('style.stroke')} />
+            <Swatches
+              colors={highlightMode ? HIGHLIGHT_COLORS : STROKE_COLORS}
+              value={v.strokeColor}
+              onChange={(c) => (highlightMode ? editor.setHighlightColor(c) : set({ strokeColor: c }))}
+              label={t('style.stroke')}
+            />
           </Field>
           {hasShape && (
             <Field

@@ -67,7 +67,7 @@ export async function buildOfflineHtml(opts) {
     const elements = scene.elements.filter((el) => !el.hidden);
     const background = scene.background ?? '#ffffff';
     const theme = opts.dark ? 'dark' : 'light';
-    const svg = exportToSvg(elements, scene.files, { background, theme, scale: 1, padding: 32 });
+    const svg = exportToSvg(elements, scene.files, { background, theme, scale: 1, padding: 32, paper: scene.paper });
     const used = new Set(elements.filter((el) => el.text).map((el) => el.fontFamily));
     const fontCss = await inlineFontCss([...used].map((f) => fontFamilyCss(f)));
     // Sahne verisi: </script> kaçışıyla güvenli gömme
