@@ -36,3 +36,7 @@ export declare function AboutDialog({ info, docsUrl, onClose }: {
     docsUrl?: string;
     onClose: () => void;
 }): import("react").JSX.Element;
+export declare function ShareDialog({ editor, onClose }: {
+    editor: Editor;
+    onClose: () => void;
+}): import("react").JSX.Element;

@@ -11,7 +11,8 @@ Tamamen tarayıcıda çalışan, el çizimi görünümlü bir beyaz tahta. Çizi
 - **Bağlı oklar:** okun ucunu bir şeklin üstüne bırak; şekil taşınsa, büyüse ya da dönse de ok bağlı kalır
 - **Katmanlar paneli:** sürükleyerek sıralama, adlandırma, gizleme, kilitleme, açılıp kapanan gruplar
 - **Düzenleme:** çoklu seçim, boyutlandırma, döndürme, çevirme, hizalama, eşit dağıtma, kopyala/yapıştır (stil dahil), geri al/yinele
-- **Dışa aktarma:** PNG, SVG ya da pano; `.biyikdraw` dosyası olarak kaydetme ve açma
+- **Paylaşma:** çizimin kendisini taşıyan bağlantı (hiçbir şey yüklenmez), “Tahtama ekle”li salt okunur görünüm ve çevrimdışı HTML dosyası
+- **Dışa aktarma:** PNG, SVG (yazı tipleri gömülü) ya da pano; `.biyikdraw` dosyası olarak kaydetme ve açma
 - **Hazır gelenler:** IndexedDB'ye otomatik kayıt, koyu tema, mobil ve dokunmatik (iki parmakla yakınlaştırma), Türkçe ve İngilizce arayüz
 
 **[Uygulamayı aç](https://draw.biyik.dev)** · **[Ekran görüntülü eğitim](https://draw.biyik.dev/docs)**
@@ -85,6 +86,24 @@ Tüm renkler `.sk-app` üzerindeki CSS değişkenleridir:
   --sk-font: 'Inter', system-ui, sans-serif;
 }
 ```
+
+## Paylaşma ve çevrimdışı
+
+**Paylaş** düğmesi çizimin kendisini taşıyan bir bağlantı üretir: çizim sıkıştırılıp adresin `#` kısmına yazılır. Bu kısım sunucuya hiç gönderilmez, yani hiçbir şey yüklenmez. Bağlantıyı açan kişi çizimi salt okunur görür ve **Tahtama ekle** ile kendi tahtasına kopyalayabilir.
+
+Aynı pencereden **çevrimdışı HTML dosyası** indirilir: çizimin SVG'sini, gömülü yazı tiplerini ve sahne verisini içeren tek bir dosya. İnternet olmadan her tarayıcıda açılır, **Aç** ile yeniden düzenlenebilir.
+
+Yardımcı işlevler de dışa açıktır:
+
+```ts
+import { encodeShare, decodeShare, buildOfflineHtml } from 'biyik-draw/react';
+
+const parca = await encodeShare({ elements, files, background: '#ffffff' });
+const adres = `${location.origin}/#${parca}`;
+const sahne = await decodeShare(location.hash); // geçersizse null
+```
+
+Uygulamanın internetsiz açılması için sayfayı ve dosyalarını önbelleğe alan bir service worker kaydet. draw.biyik.dev'in kullandığı [şu dosya](https://github.com/metinfarukbiyik/metinfarukbiyik/blob/main/public/draw-sw.js) örnek olabilir.
 
 ## Arayüz olmadan motoru kullanma
 

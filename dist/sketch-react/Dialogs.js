@@ -1,8 +1,10 @@
 'use client';
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useEffect, useRef, useState } from 'react';
-import { BookOpen, ClipboardCopy, Download, Github, X } from 'lucide-react';
-import { exportToCanvas, exportToSvg } from '../sketch/index.js';
+import { BookOpen, Check, ClipboardCopy, Copy, Download, FileCode2, Github, Send, X } from 'lucide-react';
+import { exportToCanvas, exportToSvg, fontFamilyCss } from '../sketch/index.js';
+import { encodeShare, shareUrl } from './share.js';
+import { buildOfflineHtml, inlineFontCss } from './offline.js';
 import { useI18n } from './i18n.js';
 export function Dialog({ title, onClose, children, wide, }) {
     const ref = useRef(null);
@@ -67,8 +69,14 @@ export function ExportDialog({ editor, onClose }) {
         const canvas = await exportToCanvas(elements, editor.files, options);
         download(canvas.toDataURL('image/png'), `${fileStamp(t('file.name'))}.png`);
     };
-    const svg = () => {
-        const blob = new Blob([exportToSvg(elements, editor.files, options)], { type: 'image/svg+xml' });
+    const svg = async () => {
+        // Kullanılan yazı tiplerini SVG'ye göm: dosya her yerde aynı görünür
+        const used = new Set(elements.filter((el) => el.text).map((el) => el.fontFamily));
+        const fonts = await inlineFontCss([...used].map((f) => fontFamilyCss(f)));
+        let text = exportToSvg(elements, editor.files, options);
+        if (fonts)
+            text = text.replace(/^(<svg[^>]*>)/, `$1<style>${fonts.replace(/</g, '\\3c ')}</style>`);
+        const blob = new Blob([text], { type: 'image/svg+xml' });
         const url = URL.createObjectURL(blob);
         download(url, `${fileStamp(t('file.name'))}.svg`);
         setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -160,4 +168,70 @@ export function ConfirmDialog({ title, message, confirmLabel, onConfirm, onClose
 export function AboutDialog({ info, docsUrl, onClose }) {
     const { t } = useI18n();
     return (_jsx(Dialog, { title: t('about.title'), onClose: onClose, children: _jsxs("div", { className: "sk-about", children: [_jsxs("div", { className: "sk-about-head", children: [_jsx("strong", { children: info.name }), _jsxs("span", { className: "sk-about-version", children: ["v", info.version] })] }), _jsx("p", { className: "sk-muted", children: info.description }), _jsxs("dl", { className: "sk-about-list", children: [info.author && (_jsxs("div", { children: [_jsx("dt", { children: t('about.author') }), _jsx("dd", { children: info.author.url ? _jsx("a", { href: info.author.url, children: info.author.name }) : info.author.name })] })), info.license && (_jsxs("div", { children: [_jsx("dt", { children: t('about.license') }), _jsxs("dd", { children: [info.license, " \u00B7 ", t('about.openSource')] })] })), _jsxs("div", { children: [_jsx("dt", { children: t('about.privacy') }), _jsx("dd", { children: t('about.privacyText') })] })] }), _jsxs("div", { className: "sk-dialog-actions is-start", children: [info.repoUrl && (_jsxs("a", { className: "sk-btn is-primary", href: info.repoUrl, target: "_blank", rel: "noopener", children: [_jsx(Github, { size: 15 }), " GitHub"] })), docsUrl && (_jsxs("a", { className: "sk-btn", href: docsUrl, target: "_blank", rel: "noopener", children: [_jsx(BookOpen, { size: 15 }), " ", t('menu.docs')] }))] })] }) }));
+}
+function downloadBlob(blob, name) {
+    const url = URL.createObjectURL(blob);
+    download(url, name);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+/** Uzun bağlantı uyarı eşiği (karakter). Sohbet uygulamaları bu boyutun üstünü kesebilir. */
+const LONG_LINK = 30000;
+export function ShareDialog({ editor, onClose }) {
+    const { t, lang } = useI18n();
+    const hasSelection = editor.state.selectedIds.length > 0;
+    const [onlySelected, setOnlySelected] = useState(false);
+    const [link, setLink] = useState(null);
+    const [copied, setCopied] = useState(false);
+    const elements = onlySelected && hasSelection ? editor.selectedElements() : editor.visibleElements();
+    const scene = () => {
+        const files = {};
+        for (const el of elements)
+            if (el.fileId && editor.files[el.fileId])
+                files[el.fileId] = editor.files[el.fileId];
+        return { elements, files, background: editor.state.background };
+    };
+    useEffect(() => {
+        let cancelled = false;
+        if (!elements.length)
+            return;
+        encodeShare(scene()).then((frag) => {
+            if (!cancelled)
+                setLink(shareUrl(frag));
+        });
+        return () => {
+            cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [onlySelected]);
+    const copy = async () => {
+        if (!link)
+            return;
+        try {
+            await navigator.clipboard.writeText(link);
+        }
+        catch {
+            /* seçili metinden elle kopyalanabilir */
+        }
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1600);
+    };
+    const canNativeShare = typeof navigator !== 'undefined' && 'share' in navigator;
+    const html = async () => {
+        const s = scene();
+        const text = await buildOfflineHtml({
+            scene: { type: 'biyik-draw', version: 1, source: location.origin, ...s },
+            title: `${t('file.name')} — ${location.host}`,
+            editUrl: link ?? undefined,
+            editLabel: t('share.editIn'),
+            lang,
+            dark: editor.state.theme === 'dark',
+        });
+        downloadBlob(new Blob([text], { type: 'text/html' }), `${fileStamp(t('file.name'))}.html`);
+    };
+    const sceneFile = () => {
+        const s = scene();
+        const data = { type: 'biyik-draw', version: 1, source: location.origin, ...s };
+        downloadBlob(new Blob([JSON.stringify(data)], { type: 'application/json' }), `${fileStamp(t('file.name'))}.biyikdraw`);
+    };
+    return (_jsx(Dialog, { title: t('share.title'), onClose: onClose, children: !elements.length ? (_jsx("p", { className: "sk-muted", children: t('share.empty') })) : (_jsxs("div", { className: "sk-share", children: [_jsx("p", { className: "sk-muted", children: t('share.lead') }), hasSelection && (_jsxs("label", { className: "sk-check", children: [_jsx("input", { type: "checkbox", checked: onlySelected, onChange: (e) => setOnlySelected(e.target.checked) }), t('export.onlySelected')] })), _jsxs("div", { className: "sk-share-field", children: [_jsx("span", { className: "sk-share-label", children: t('share.link') }), _jsxs("div", { className: "sk-share-row", children: [_jsx("input", { className: "sk-share-input", readOnly: true, value: link ?? t('share.preparing'), onFocus: (e) => e.target.select(), "aria-label": t('share.link') }), _jsxs("button", { type: "button", className: "sk-btn is-primary", onClick: copy, disabled: !link, children: [copied ? _jsx(Check, { size: 15 }) : _jsx(Copy, { size: 15 }), " ", copied ? t('share.copied') : t('share.copy')] })] }), link && (_jsxs("span", { className: "sk-share-meta", children: [t('share.size'), ": ", (link.length / 1024).toFixed(1), " KB", canNativeShare && (_jsxs("button", { type: "button", className: "sk-share-native", onClick: () => navigator.share({ url: link, title: t('share.title') }).catch(() => undefined), children: [_jsx(Send, { size: 13 }), " ", t('share.native')] }))] })), link && link.length > LONG_LINK && _jsx("p", { className: "sk-share-warn", children: t('share.long') })] }), _jsxs("div", { className: "sk-share-offline", children: [_jsx("strong", { children: t('share.offline') }), _jsx("p", { className: "sk-muted", children: t('share.offlineLead') }), _jsxs("div", { className: "sk-dialog-actions is-start", children: [_jsxs("button", { type: "button", className: "sk-btn", onClick: html, children: [_jsx(FileCode2, { size: 15 }), " ", t('share.html')] }), _jsxs("button", { type: "button", className: "sk-btn", onClick: sceneFile, children: [_jsx(Download, { size: 15 }), " ", t('share.file')] })] })] })] })) }));
 }

@@ -1,6 +1,6 @@
 {
   "name": "biyik-draw",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A hand-drawn style whiteboard for the browser — engine and React UI written from scratch. Powers draw.biyik.dev.",
   "type": "module",
   "license": "MIT",

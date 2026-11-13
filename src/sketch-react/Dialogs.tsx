@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { BookOpen, ClipboardCopy, Download, Github, X } from 'lucide-react';
-import { exportToCanvas, exportToSvg, type Editor } from '../sketch';
+import { BookOpen, Check, ClipboardCopy, Copy, Download, FileCode2, Github, Send, X } from 'lucide-react';
+import { exportToCanvas, exportToSvg, fontFamilyCss, type Editor, type FontFamily } from '../sketch';
+import { encodeShare, shareUrl } from './share';
+import { buildOfflineHtml, inlineFontCss } from './offline';
 import { useI18n, type T } from './i18n';
 
 export function Dialog({
@@ -102,8 +104,13 @@ export function ExportDialog({ editor, onClose }: { editor: Editor; onClose: () 
     const canvas = await exportToCanvas(elements, editor.files, options);
     download(canvas.toDataURL('image/png'), `${fileStamp(t('file.name'))}.png`);
   };
-  const svg = () => {
-    const blob = new Blob([exportToSvg(elements, editor.files, options)], { type: 'image/svg+xml' });
+  const svg = async () => {
+    // Kullanılan yazı tiplerini SVG'ye göm: dosya her yerde aynı görünür
+    const used = new Set<FontFamily>(elements.filter((el) => el.text).map((el) => el.fontFamily));
+    const fonts = await inlineFontCss([...used].map((f) => fontFamilyCss(f)));
+    let text = exportToSvg(elements, editor.files, options);
+    if (fonts) text = text.replace(/^(<svg[^>]*>)/, `$1<style>${fonts.replace(/</g, '\\3c ')}</style>`);
+    const blob = new Blob([text], { type: 'image/svg+xml' });
     const url = URL.createObjectURL(blob);
     download(url, `${fileStamp(t('file.name'))}.svg`);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -352,6 +359,134 @@ export function AboutDialog({ info, docsUrl, onClose }: { info: AboutInfo; docsU
           )}
         </div>
       </div>
+    </Dialog>
+  );
+}
+
+function downloadBlob(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  download(url, name);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Uzun bağlantı uyarı eşiği (karakter). Sohbet uygulamaları bu boyutun üstünü kesebilir. */
+const LONG_LINK = 30_000;
+
+export function ShareDialog({ editor, onClose }: { editor: Editor; onClose: () => void }) {
+  const { t, lang } = useI18n();
+  const hasSelection = editor.state.selectedIds.length > 0;
+  const [onlySelected, setOnlySelected] = useState(false);
+  const [link, setLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const elements = onlySelected && hasSelection ? editor.selectedElements() : editor.visibleElements();
+
+  const scene = () => {
+    const files: Record<string, string> = {};
+    for (const el of elements) if (el.fileId && editor.files[el.fileId]) files[el.fileId] = editor.files[el.fileId];
+    return { elements, files, background: editor.state.background };
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!elements.length) return;
+    encodeShare(scene()).then((frag) => {
+      if (!cancelled) setLink(shareUrl(frag));
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onlySelected]);
+
+  const copy = async () => {
+    if (!link) return;
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch {
+      /* seçili metinden elle kopyalanabilir */
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1600);
+  };
+
+  const canNativeShare = typeof navigator !== 'undefined' && 'share' in navigator;
+
+  const html = async () => {
+    const s = scene();
+    const text = await buildOfflineHtml({
+      scene: { type: 'biyik-draw', version: 1, source: location.origin, ...s },
+      title: `${t('file.name')} — ${location.host}`,
+      editUrl: link ?? undefined,
+      editLabel: t('share.editIn'),
+      lang,
+      dark: editor.state.theme === 'dark',
+    });
+    downloadBlob(new Blob([text], { type: 'text/html' }), `${fileStamp(t('file.name'))}.html`);
+  };
+
+  const sceneFile = () => {
+    const s = scene();
+    const data = { type: 'biyik-draw', version: 1, source: location.origin, ...s };
+    downloadBlob(new Blob([JSON.stringify(data)], { type: 'application/json' }), `${fileStamp(t('file.name'))}.biyikdraw`);
+  };
+
+  return (
+    <Dialog title={t('share.title')} onClose={onClose}>
+      {!elements.length ? (
+        <p className="sk-muted">{t('share.empty')}</p>
+      ) : (
+        <div className="sk-share">
+          <p className="sk-muted">{t('share.lead')}</p>
+          {hasSelection && (
+            <label className="sk-check">
+              <input type="checkbox" checked={onlySelected} onChange={(e) => setOnlySelected(e.target.checked)} />
+              {t('export.onlySelected')}
+            </label>
+          )}
+          <div className="sk-share-field">
+            <span className="sk-share-label">{t('share.link')}</span>
+            <div className="sk-share-row">
+              <input
+                className="sk-share-input"
+                readOnly
+                value={link ?? t('share.preparing')}
+                onFocus={(e) => e.target.select()}
+                aria-label={t('share.link')}
+              />
+              <button type="button" className="sk-btn is-primary" onClick={copy} disabled={!link}>
+                {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? t('share.copied') : t('share.copy')}
+              </button>
+            </div>
+            {link && (
+              <span className="sk-share-meta">
+                {t('share.size')}: {(link.length / 1024).toFixed(1)} KB
+                {canNativeShare && (
+                  <button
+                    type="button"
+                    className="sk-share-native"
+                    onClick={() => navigator.share({ url: link, title: t('share.title') }).catch(() => undefined)}
+                  >
+                    <Send size={13} /> {t('share.native')}
+                  </button>
+                )}
+              </span>
+            )}
+            {link && link.length > LONG_LINK && <p className="sk-share-warn">{t('share.long')}</p>}
+          </div>
+          <div className="sk-share-offline">
+            <strong>{t('share.offline')}</strong>
+            <p className="sk-muted">{t('share.offlineLead')}</p>
+            <div className="sk-dialog-actions is-start">
+              <button type="button" className="sk-btn" onClick={html}>
+                <FileCode2 size={15} /> {t('share.html')}
+              </button>
+              <button type="button" className="sk-btn" onClick={sceneFile}>
+                <Download size={15} /> {t('share.file')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Dialog>
   );
 }

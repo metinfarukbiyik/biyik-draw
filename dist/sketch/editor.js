@@ -44,6 +44,7 @@ export class Editor {
             grid: false,
             view: { zoom: 1, scrollX: 0, scrollY: 0 },
             viewport: { width: 0, height: 0 },
+            readOnly: false,
         };
         this.cursor = 'default';
         /** Sürüm: her değişiklikte artar (React aboneliği için). */
@@ -75,6 +76,8 @@ export class Editor {
             return () => this.listeners.delete(fn);
         };
         this.getVersion = () => this.version;
+        /** Görünüm henüz ölçülmeden istenen sığdırma, ölçü gelince uygulanır. */
+        this.pendingFit = null;
         this.copiedStyle = null;
     }
     emit(sceneChanged = false) {
@@ -99,6 +102,11 @@ export class Editor {
     }
     setViewport(width, height) {
         this.setState({ viewport: { width, height } });
+        if (this.pendingFit && width > 0 && height > 0) {
+            const onlySelected = this.pendingFit === 'selection';
+            this.pendingFit = null;
+            this.zoomToFit(onlySelected);
+        }
     }
     viewportCenterWorld() {
         return this.toWorld(this.state.viewport.width / 2, this.state.viewport.height / 2);
@@ -117,7 +125,11 @@ export class Editor {
         this.zoomAt(1, width / 2, height / 2);
     }
     zoomToFit(onlySelected = false) {
-        const els = onlySelected && this.state.selectedIds.length ? this.selectedElements() : this.elements;
+        if (!this.state.viewport.width || !this.state.viewport.height) {
+            this.pendingFit = onlySelected ? 'selection' : 'all';
+            return;
+        }
+        const els = onlySelected && this.state.selectedIds.length ? this.selectedElements() : this.visibleElements();
         const b = commonBounds(els);
         if (!b)
             return this.resetZoom();
@@ -145,7 +157,15 @@ export class Editor {
         this.setState({ grid: !this.state.grid });
         this.emit(true);
     }
+    setReadOnly(readOnly) {
+        this.finishPending();
+        this.state = { ...this.state, readOnly, selectedIds: [], editingId: null, tool: readOnly ? 'hand' : 'select' };
+        this.updateCursor();
+        this.emit();
+    }
     setTool(tool) {
+        if (this.state.readOnly)
+            return;
         this.finishPending();
         if (this.state.editingId)
             this.finishEditing();
@@ -574,6 +594,8 @@ export class Editor {
     }
     /** Panodan gelen metni yapıştırır: kendi öğelerimiz ya da düz metin. */
     pasteText(text) {
+        if (this.state.readOnly)
+            return false;
         try {
             const data = JSON.parse(text);
             if (data?.type === CLIPBOARD_TYPE && Array.isArray(data.elements)) {
@@ -598,11 +620,15 @@ export class Editor {
         this.setState({ selectedIds: [placed.id], tool: 'select' });
         return true;
     }
-    pasteElements(els, files) {
+    pasteElements(els, files, opts = {}) {
         const b = commonBounds(els);
         if (!b)
             return;
-        const at = this.pointerWorld ?? this.viewportCenterWorld();
+        let at = this.pointerWorld ?? this.viewportCenterWorld();
+        // Yanına yerleştir: mevcut çizimlerle üst üste binmesin
+        const own = opts.beside ? commonBounds(this.visibleElements()) : null;
+        if (own)
+            at = [own[2] + 80 + (b[2] - b[0]) / 2, (own[1] + own[3]) / 2];
         const offset = [at[0] - (b[0] + b[2]) / 2, at[1] - (b[1] + b[3]) / 2];
         const clones = this.cloneElements(els, offset);
         Object.assign(this.files, files);
@@ -611,6 +637,8 @@ export class Editor {
     }
     /* ───────────── Görsel ───────────── */
     async insertImageFile(file, at) {
+        if (this.state.readOnly)
+            return;
         const dataUrl = await readImage(file);
         if (!dataUrl)
             return;
@@ -847,6 +875,13 @@ export class Editor {
         }
         if (this.pointers.size > 2)
             return;
+        if (this.state.readOnly) {
+            const { scrollX, scrollY } = this.state.view;
+            this.drag = { kind: 'pan', sx: p.x, sy: p.y, scrollX, scrollY };
+            this.cursor = 'grabbing';
+            this.emit();
+            return;
+        }
         if (this.state.editingId)
             this.finishEditing();
         const { tool } = this.state;
@@ -1406,7 +1441,7 @@ export class Editor {
         const prevHover = this.hoverId;
         const prevCursor = this.cursor;
         this.hoverId = null;
-        if (this.spaceDown || this.state.tool === 'hand')
+        if (this.spaceDown || this.state.tool === 'hand' || this.state.readOnly)
             this.cursor = 'grab';
         else if (this.state.tool === 'select') {
             const handle = this.hitHandle(p.x, p.y);
@@ -1432,7 +1467,7 @@ export class Editor {
     updateCursor() {
         const { tool } = this.state;
         this.cursor =
-            this.spaceDown || tool === 'hand'
+            this.spaceDown || tool === 'hand' || this.state.readOnly
                 ? 'grab'
                 : tool === 'select'
                     ? 'default'
@@ -1453,6 +1488,8 @@ export class Editor {
             this.scrollBy(-e.dx, -e.dy);
     }
     doubleClick(sx, sy) {
+        if (this.state.readOnly)
+            return;
         if (this.pending) {
             this.finishPending();
             return;
@@ -1484,6 +1521,11 @@ export class Editor {
                 this.emit();
             }
             return true;
+        }
+        if (this.state.readOnly) {
+            const zoomKey = mod && ['=', '+', '-', '0'].includes(key);
+            if (!zoomKey && !(e.shiftKey && e.code === 'Digit1'))
+                return false;
         }
         if (mod && key === 'z') {
             if (e.shiftKey)

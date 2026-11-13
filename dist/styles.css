@@ -1108,6 +1108,115 @@
   font-size: 12px;
 }
 
+
+/* ── Paylaşılan çizim görünümü ── */
+
+.sk-viewbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 5px 5px 14px;
+  animation: sk-pop 200ms var(--sk-spring) both;
+}
+.sk-viewbar-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 6px;
+  color: var(--sk-muted);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.sk-viewbar .sk-btn {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+/* ── Paylaş penceresi ── */
+
+.sk-share {
+  display: grid;
+  gap: 16px;
+}
+.sk-share-field {
+  display: grid;
+  gap: 8px;
+}
+.sk-share-label {
+  font-size: 12px;
+  font-weight: 500;
+}
+.sk-share-row {
+  display: flex;
+  gap: 8px;
+}
+.sk-share-input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--sk-line);
+  border-radius: 10px;
+  outline: 0;
+  background: var(--sk-surface);
+  color: var(--sk-body);
+  font-family: var(--sk-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.sk-share-input:focus {
+  border-color: var(--sk-line-strong);
+}
+.sk-share-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--sk-subtle);
+  font-size: 12px;
+}
+.sk-share-native {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sk-ink);
+  font-size: 12px;
+  font-weight: 500;
+}
+.sk-share-native:hover {
+  background: var(--sk-sunken);
+}
+.sk-share-warn {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, #f59e0b 14%, transparent);
+  color: var(--sk-body);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.sk-share-offline {
+  display: grid;
+  gap: 6px;
+  padding-top: 16px;
+  border-top: 1px solid var(--sk-line);
+  font-size: 14px;
+}
+.sk-share-offline .sk-dialog-actions {
+  margin-top: 6px;
+}
+.sk-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 /* ── Dar ekran ── */
 
 @media (max-width: 760px) {
@@ -1131,6 +1240,23 @@
   }
   .sk-toolbar::-webkit-scrollbar {
     display: none;
+  }
+  .sk-viewbar {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 8px;
+  }
+  .sk-viewbar-label {
+    flex-basis: 100%;
+    justify-content: center;
+    margin: 0 0 2px;
+  }
+  .sk-share-row {
+    flex-direction: column;
   }
   .sk-tool {
     flex: none;

@@ -21,6 +21,8 @@ export interface AppState {
         width: number;
         height: number;
     };
+    /** Salt okunur görüntüleme (paylaşılan çizim): yalnızca kaydırma ve yakınlaştırma. */
+    readOnly: boolean;
 }
 export interface PointerInput {
     id: number;
@@ -76,6 +78,8 @@ export declare class Editor {
     toWorld(sx: number, sy: number): Point;
     toScreen([x, y]: Point): Point;
     setViewport(width: number, height: number): void;
+    /** Görünüm henüz ölçülmeden istenen sığdırma, ölçü gelince uygulanır. */
+    private pendingFit;
     private viewportCenterWorld;
     zoomAt(nextZoom: number, sx: number, sy: number): void;
     zoomBy(factor: number): void;
@@ -85,6 +89,7 @@ export declare class Editor {
     setTheme(theme: Theme): void;
     setBackground(background: string): void;
     toggleGrid(): void;
+    setReadOnly(readOnly: boolean): void;
     setTool(tool: Tool): void;
     toggleToolLock(): void;
     /** Stil değişikliği: geçerli araç stiline ve seçili öğelere uygulanır. */
@@ -148,7 +153,9 @@ export declare class Editor {
     cutSelection(): string | null;
     /** Panodan gelen metni yapıştırır: kendi öğelerimiz ya da düz metin. */
     pasteText(text: string): boolean;
-    pasteElements(els: SketchElement[], files: Files): void;
+    pasteElements(els: SketchElement[], files: Files, opts?: {
+        beside?: boolean;
+    }): void;
     insertImageFile(file: File, at?: Point | null): Promise<void>;
     private fitText;
     startEditing(id: string): void;

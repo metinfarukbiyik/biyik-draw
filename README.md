@@ -11,7 +11,8 @@ A whiteboard with a hand-drawn look that runs entirely in the browser. The drawi
 - **Arrows that stick:** drop an arrow end on a shape and it stays bound when the shape moves, resizes or rotates
 - **Layers panel:** reorder by dragging, rename, hide, lock, collapsible groups
 - **Editing:** multi-select, resize, rotate, flip, align, distribute, copy/paste (including style), undo/redo
-- **Export:** PNG, SVG or clipboard; save and open `.biyikdraw` files
+- **Share:** a link that carries the drawing itself (nothing is uploaded), read-only view with “Add to my board”, and an offline HTML file
+- **Export:** PNG, SVG (fonts embedded) or clipboard; save and open `.biyikdraw` files
 - **Built in:** autosave to IndexedDB, dark theme, mobile and touch (pinch to zoom), Turkish and English UI
 
 **[Open the app](https://draw.biyik.dev)** · **[Tutorial with screenshots](https://draw.biyik.dev/docs/en)**
@@ -85,6 +86,24 @@ Every color is a CSS variable on `.sk-app`. Override them to match your design:
   --sk-font: 'Inter', system-ui, sans-serif;
 }
 ```
+
+## Sharing and offline
+
+The **Share** button creates a link that carries the drawing itself, compressed into the URL `#` fragment. The fragment is never sent to a server, so nothing is uploaded. Opening the link shows the drawing read-only, with **Add to my board** to copy it into your own board.
+
+The same dialog downloads an **offline HTML file**: a single file with the drawing as SVG, embedded fonts and the scene data. It opens in any browser without internet and can be reopened for editing with **Open**.
+
+The helpers are exported too:
+
+```ts
+import { encodeShare, decodeShare, buildOfflineHtml } from 'biyik-draw/react';
+
+const fragment = await encodeShare({ elements, files, background: '#ffffff' });
+const url = `${location.origin}/#${fragment}`;
+const scene = await decodeShare(location.hash); // null if invalid
+```
+
+To make your app open without internet, register a service worker that caches the page and its static files. draw.biyik.dev uses [this one](https://github.com/metinfarukbiyik/metinfarukbiyik/blob/main/public/draw-sw.js) as an example.
 
 ## Use the engine without the UI
 

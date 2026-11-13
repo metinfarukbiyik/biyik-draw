@@ -1,13 +1,15 @@
 "use client";
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useCallback, useEffect, useRef, useState, } from "react";
-import { BookOpen, Check, CircleHelp, FolderOpen, Grid3x3, ImageDown, Info, Languages, Layers, Menu, Minus, Moon, Plus, Redo2, Save, Share2, SlidersHorizontal, Sun, Trash2, Undo2, } from "lucide-react";
+import { BookOpen, Check, CircleHelp, FolderOpen, Grid3x3, ImageDown, Info, Languages, Layers, Menu, Minus, Moon, Plus, Redo2, Save, Share2, SlidersHorizontal, Sun, Trash2, Undo2, Eye, } from "lucide-react";
 import { CANVAS_COLORS, configureFonts, DEFAULT_STYLE, Editor, } from "../sketch/index.js";
 import Board from "./Board.js";
 import Toolbar from "./Toolbar.js";
 import StylePanel from "./StylePanel.js";
 import LayersPanel from "./LayersPanel.js";
-import { AboutDialog, ConfirmDialog, ExportDialog, HelpDialog, } from "./Dialogs.js";
+import { AboutDialog, ConfirmDialog, ExportDialog, HelpDialog, ShareDialog, } from "./Dialogs.js";
+import { decodeShare, hasShare } from "./share.js";
+import { sceneFromHtml } from "./offline.js";
 import { getItem, setItem } from "./storage.js";
 import { useEditor } from "./useEditor.js";
 import { browserLang, I18nContext, makeT } from "./i18n.js";
@@ -40,6 +42,9 @@ export default function DrawApp({ handFont = "'Caveat', 'Comic Sans MS', cursive
     const [menuOpen, setMenuOpen] = useState(false);
     const [layersOpen, setLayersOpen] = useState(false);
     const [dialog, setDialog] = useState(null);
+    /** Paylaşılan çizim açıkken kullanıcının kendi tahtası burada bekler. */
+    const ownBoard = useRef(null);
+    const [shared, setShared] = useState(null);
     const [panelOpen, setPanelOpen] = useState(false);
     const fileInput = useRef(null);
     const imageInput = useRef(null);
@@ -51,6 +56,60 @@ export default function DrawApp({ handFont = "'Caveat', 'Comic Sans MS', cursive
     });
     const sceneKey = `${storageKey}-scene`;
     const prefsKey = `${storageKey}-prefs`;
+    /* ── Paylaşılan çizim ── */
+    async function openShared(hash) {
+        const payload = await decodeShare(hash);
+        if (!payload) {
+            window.alert(t("view.invalid"));
+            history.replaceState(null, "", location.pathname + location.search);
+            return;
+        }
+        if (!editor.state.readOnly) {
+            ownBoard.current = {
+                elements: editor.elements,
+                files: editor.files,
+                view: editor.state.view,
+                background: editor.state.background,
+            };
+        }
+        editor.load(payload, { resetHistory: true });
+        editor.state = {
+            ...editor.state,
+            background: payload.background ?? editor.state.background,
+        };
+        editor.setReadOnly(true);
+        setShared(payload);
+        editor.zoomToFit();
+    }
+    const closeShared = (addToBoard) => {
+        const own = ownBoard.current;
+        history.replaceState(null, "", location.pathname + location.search);
+        editor.load({ elements: own?.elements ?? [], files: own?.files ?? {} }, { resetHistory: true });
+        editor.state = {
+            ...editor.state,
+            view: own?.view ?? editor.state.view,
+            background: own?.background ?? editor.state.background,
+        };
+        editor.setReadOnly(false);
+        if (addToBoard && shared) {
+            editor.pasteElements(shared.elements, shared.files, { beside: true });
+            editor.zoomToFit(true);
+        }
+        ownBoard.current = null;
+        setShared(null);
+    };
+    // Uygulama açıkken adres çubuğuna yeni bir paylaşım bağlantısı yapıştırılırsa
+    useEffect(() => {
+        if (!ready)
+            return;
+        const onHash = () => {
+            if (hasShare(location.hash))
+                void openShared(location.hash);
+        };
+        window.addEventListener("hashchange", onHash);
+        return () => window.removeEventListener("hashchange", onHash);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [ready]);
     /* ── Yazı tipleri ve kayıtlı sahne ── */
     useEffect(() => {
         const css = getComputedStyle(document.documentElement);
@@ -82,6 +141,10 @@ export default function DrawApp({ handFont = "'Caveat', 'Comic Sans MS', cursive
                 editor.load(scene, { resetHistory: true });
             else
                 editor.remeasureText();
+            if (hasShare(location.hash))
+                await openShared(location.hash);
+            if (cancelled)
+                return;
             setReady(true);
             // Yazı tipleri yüklenince metin ölçüleri değişir
             await Promise.all([handFont, sans || "system-ui", mono || "monospace"].map((f) => document.fonts.load(`24px ${f}`).catch(() => null)));
@@ -103,6 +166,9 @@ export default function DrawApp({ handFont = "'Caveat', 'Comic Sans MS', cursive
         let lastScene = editor.sceneVersion;
         let lastTheme = editor.state.theme;
         const saveScene = () => {
+            // Paylaşılan çizim görüntülenirken kendi kaydının üzerine yazma
+            if (editor.state.readOnly)
+                return;
             const used = new Set(editor.elements.flatMap((el) => (el.fileId ? [el.fileId] : [])));
             const files = {};
             for (const id of used)
@@ -111,6 +177,8 @@ export default function DrawApp({ handFont = "'Caveat', 'Comic Sans MS', cursive
             void setItem(sceneKey, { elements: editor.elements, files });
         };
         const savePrefs = () => {
+            if (editor.state.readOnly)
+                return;
             const { background, grid, view, style, toolLocked } = editor.state;
             void setItem(prefsKey, {
                 background,
@@ -159,7 +227,11 @@ export default function DrawApp({ handFont = "'Caveat', 'Comic Sans MS', cursive
     }, [editor, t]);
     const loadFile = useCallback(async (file) => {
         try {
-            const data = JSON.parse(await file.text());
+            const text = await file.text();
+            // Çevrimdışı HTML paylaşım dosyası da açılabilir
+            const data = text.trimStart().startsWith("<")
+                ? sceneFromHtml(text)
+                : JSON.parse(text);
             if (!isSceneFile(data))
                 throw new Error("format");
             editor.load(data);
@@ -277,7 +349,8 @@ export default function DrawApp({ handFont = "'Caveat', 'Comic Sans MS', cursive
         window.addEventListener("pointerdown", onDown);
         return () => window.removeEventListener("pointerdown", onDown);
     }, [menuOpen]);
-    const empty = ready && editor.elements.length === 0 && !state.editingId;
+    const empty = ready && editor.elements.length === 0 && !state.editingId && !shared;
+    const readOnly = state.readOnly;
     const hasPanel = editor.selectedElements().length > 0 ||
         !!state.editingId ||
         !["select", "hand", "eraser", "image"].includes(state.tool);
@@ -285,7 +358,7 @@ export default function DrawApp({ handFont = "'Caveat', 'Comic Sans MS', cursive
         setMenuOpen(false);
         fn();
     };
-    return (_jsx(I18nContext.Provider, { value: { lang, t }, children: _jsxs("div", { className: `sk-app${state.theme === "dark" ? " is-dark" : ""}${layersOpen ? " has-layers" : ""}`, children: [_jsx(Board, { editor: editor, onDropFile: (file, at) => handleFile(file, at) }), _jsxs("div", { className: "sk-top", children: [_jsxs("div", { className: "sk-top-left", ref: menuRef, children: [_jsx("button", { type: "button", className: "sk-icon-btn sk-glass", "aria-label": t("menu.aria"), "aria-expanded": menuOpen, onClick: () => setMenuOpen((v) => !v), children: _jsx(Menu, { size: 18 }) }), menuOpen && (_jsxs("div", { className: "sk-menu sk-glass", role: "menu", children: [_jsxs("button", { type: "button", role: "menuitem", onClick: closeMenuThen(() => fileInput.current?.click()), children: [_jsx(FolderOpen, { size: 16 }), " ", t("menu.open"), " ", _jsx("kbd", { children: "\u2318O" })] }), _jsxs("button", { type: "button", role: "menuitem", onClick: closeMenuThen(saveFile), children: [_jsx(Save, { size: 16 }), " ", t("menu.save"), " ", _jsx("kbd", { children: "\u2318S" })] }), _jsxs("button", { type: "button", role: "menuitem", onClick: closeMenuThen(() => setDialog("export")), children: [_jsx(ImageDown, { size: 16 }), " ", t("menu.export"), " ", _jsx("kbd", { children: "\u2318\u21E7E" })] }), _jsxs("button", { type: "button", role: "menuitem", onClick: closeMenuThen(() => setDialog("clear")), children: [_jsx(Trash2, { size: 16 }), " ", t("menu.clear")] }), _jsx("hr", {}), _jsxs("button", { type: "button", role: "menuitemcheckbox", "aria-checked": layersOpen, onClick: closeMenuThen(() => setLayersOpen((v) => !v)), children: [_jsx(Layers, { size: 16 }), " ", t("menu.layers"), " ", _jsx("kbd", { children: "\u2325L" })] }), _jsxs("button", { type: "button", role: "menuitemcheckbox", "aria-checked": state.grid, onClick: () => editor.toggleGrid(), children: [_jsx(Grid3x3, { size: 16 }), " ", t("menu.grid"), " ", state.grid && _jsx(Check, { size: 15, className: "sk-menu-check" })] }), _jsxs("button", { type: "button", role: "menuitem", onClick: () => editor.setTheme(state.theme === "dark" ? "light" : "dark"), children: [state.theme === "dark" ? (_jsx(Sun, { size: 16 })) : (_jsx(Moon, { size: 16 })), state.theme === "dark" ? t("menu.light") : t("menu.dark")] }), _jsxs("div", { className: "sk-menu-lang", role: "group", "aria-label": t("menu.language"), children: [_jsx(Languages, { size: 16 }), _jsx("span", { children: t("menu.language") }), _jsx("div", { className: "sk-seg", children: ["tr", "en"].map((l) => (_jsx("button", { type: "button", "aria-pressed": lang === l, onClick: () => changeLang(l), children: l.toUpperCase() }, l))) })] }), _jsxs("div", { className: "sk-menu-section", children: [_jsx("span", { children: t("menu.canvas") }), _jsx("div", { className: "sk-menu-swatches", children: CANVAS_COLORS.map((c) => (_jsx("button", { type: "button", className: "sk-swatch", style: { background: c }, "aria-pressed": state.background === c, "aria-label": `${t("menu.canvasColor")} ${c}`, onClick: () => editor.setBackground(c) }, c))) })] }), _jsx("hr", {}), _jsxs("button", { type: "button", role: "menuitem", onClick: closeMenuThen(() => setDialog("help")), children: [_jsx(CircleHelp, { size: 16 }), " ", t("menu.shortcuts"), " ", _jsx("kbd", { children: "?" })] }), docsUrl && (_jsxs("a", { role: "menuitem", href: docsUrl, target: "_blank", rel: "noopener", children: [_jsx(BookOpen, { size: 16 }), " ", t("menu.docs")] })), about && (_jsxs("button", { type: "button", role: "menuitem", onClick: closeMenuThen(() => setDialog("about")), children: [_jsx(Info, { size: 16 }), " ", t("menu.about")] })), links.length > 0 && _jsx("hr", {}), links.map((l) => (_jsxs("a", { role: "menuitem", href: l.href, target: l.href.startsWith("http") ? "_blank" : undefined, rel: "noopener", children: [l.icon, " ", l.label] }, l.href)))] }))] }), _jsx(Toolbar, { editor: editor }), _jsxs("div", { className: "sk-top-right", children: [_jsx("button", { type: "button", className: "sk-icon-btn sk-glass", "aria-label": t("menu.layers"), "aria-pressed": layersOpen, title: `${t("menu.layers")} (⌥L)`, onClick: () => setLayersOpen((v) => !v), children: _jsx(Layers, { size: 17 }) }), _jsxs("button", { type: "button", className: "sk-btn is-primary", onClick: () => setDialog("export"), children: [_jsx(Share2, { size: 15 }), " ", _jsx("span", { className: "sk-hide-sm", children: t("top.export") })] })] })] }), hasPanel && (_jsxs(_Fragment, { children: [_jsx("button", { type: "button", className: "sk-panel-toggle sk-icon-btn sk-glass", "aria-label": t("top.styles"), "aria-expanded": panelOpen, onClick: () => setPanelOpen((v) => !v), children: _jsx(SlidersHorizontal, { size: 17 }) }), _jsx("div", { className: `sk-panel-wrap${panelOpen ? " is-open" : ""}`, children: _jsx(StylePanel, { editor: editor }) })] })), layersOpen && (_jsx("div", { className: "sk-layers-wrap", children: _jsx(LayersPanel, { editor: editor, onClose: () => setLayersOpen(false) }) })), _jsxs("div", { className: "sk-bottom-left", children: [_jsxs("div", { className: "sk-group sk-glass", children: [_jsx("button", { type: "button", className: "sk-icon-btn", "aria-label": t("zoom.out"), onClick: () => editor.zoomBy(1 / 1.2), children: _jsx(Minus, { size: 16 }) }), _jsxs("button", { type: "button", className: "sk-zoom", title: t("zoom.reset"), onClick: () => editor.resetZoom(), children: [Math.round(state.view.zoom * 100), "%"] }), _jsx("button", { type: "button", className: "sk-icon-btn", "aria-label": t("zoom.in"), onClick: () => editor.zoomBy(1.2), children: _jsx(Plus, { size: 16 }) })] }), _jsxs("div", { className: "sk-group sk-glass", children: [_jsx("button", { type: "button", className: "sk-icon-btn", "aria-label": t("history.undo"), disabled: !editor.canUndo, onClick: () => editor.undo(), children: _jsx(Undo2, { size: 16 }) }), _jsx("button", { type: "button", className: "sk-icon-btn", "aria-label": t("history.redo"), disabled: !editor.canRedo, onClick: () => editor.redo(), children: _jsx(Redo2, { size: 16 }) })] })] }), _jsx("div", { className: "sk-bottom-right", children: _jsx("button", { type: "button", className: "sk-icon-btn sk-glass", "aria-label": t("menu.shortcuts"), onClick: () => setDialog("help"), children: _jsx(CircleHelp, { size: 17 }) }) }), empty && (_jsxs("div", { className: "sk-welcome", children: [brand ?? _jsx(Wordmark, {}), _jsx("p", { children: t("welcome.text") }), _jsxs("div", { className: "sk-welcome-actions", children: [_jsxs("button", { type: "button", className: "sk-btn", onClick: () => fileInput.current?.click(), children: [_jsx(FolderOpen, { size: 15 }), " ", t("welcome.open")] }), _jsxs("button", { type: "button", className: "sk-btn", onClick: () => setDialog("help"), children: [_jsx(CircleHelp, { size: 15 }), " ", t("welcome.shortcuts")] }), docsUrl && (_jsxs("a", { className: "sk-btn", href: docsUrl, target: "_blank", rel: "noopener", children: [_jsx(BookOpen, { size: 15 }), " ", t("welcome.docs")] }))] }), _jsx("p", { className: "sk-welcome-hint", children: t("welcome.hint") })] })), _jsx("input", { ref: fileInput, type: "file", accept: ".biyikdraw,.json,application/json,image/*", hidden: true, onChange: (e) => {
+    return (_jsx(I18nContext.Provider, { value: { lang, t }, children: _jsxs("div", { className: `sk-app${state.theme === "dark" ? " is-dark" : ""}${layersOpen ? " has-layers" : ""}`, children: [_jsx(Board, { editor: editor, onDropFile: (file, at) => handleFile(file, at) }), _jsxs("div", { className: "sk-top", children: [_jsxs("div", { className: "sk-top-left", ref: menuRef, children: [_jsx("button", { type: "button", className: "sk-icon-btn sk-glass", "aria-label": t("menu.aria"), "aria-expanded": menuOpen, onClick: () => setMenuOpen((v) => !v), children: _jsx(Menu, { size: 18 }) }), menuOpen && (_jsxs("div", { className: "sk-menu sk-glass", role: "menu", children: [_jsxs("button", { type: "button", role: "menuitem", onClick: closeMenuThen(() => setDialog("share")), children: [_jsx(Share2, { size: 16 }), " ", t("menu.share")] }), !readOnly && (_jsxs("button", { type: "button", role: "menuitem", onClick: closeMenuThen(() => fileInput.current?.click()), children: [_jsx(FolderOpen, { size: 16 }), " ", t("menu.open"), " ", _jsx("kbd", { children: "\u2318O" })] })), _jsxs("button", { type: "button", role: "menuitem", onClick: closeMenuThen(saveFile), children: [_jsx(Save, { size: 16 }), " ", t("menu.save"), " ", _jsx("kbd", { children: "\u2318S" })] }), _jsxs("button", { type: "button", role: "menuitem", onClick: closeMenuThen(() => setDialog("export")), children: [_jsx(ImageDown, { size: 16 }), " ", t("menu.export"), " ", _jsx("kbd", { children: "\u2318\u21E7E" })] }), !readOnly && (_jsxs("button", { type: "button", role: "menuitem", onClick: closeMenuThen(() => setDialog("clear")), children: [_jsx(Trash2, { size: 16 }), " ", t("menu.clear")] })), _jsx("hr", {}), _jsxs("button", { type: "button", role: "menuitemcheckbox", "aria-checked": layersOpen, onClick: closeMenuThen(() => setLayersOpen((v) => !v)), children: [_jsx(Layers, { size: 16 }), " ", t("menu.layers"), " ", _jsx("kbd", { children: "\u2325L" })] }), _jsxs("button", { type: "button", role: "menuitemcheckbox", "aria-checked": state.grid, onClick: () => editor.toggleGrid(), children: [_jsx(Grid3x3, { size: 16 }), " ", t("menu.grid"), " ", state.grid && _jsx(Check, { size: 15, className: "sk-menu-check" })] }), _jsxs("button", { type: "button", role: "menuitem", onClick: () => editor.setTheme(state.theme === "dark" ? "light" : "dark"), children: [state.theme === "dark" ? (_jsx(Sun, { size: 16 })) : (_jsx(Moon, { size: 16 })), state.theme === "dark" ? t("menu.light") : t("menu.dark")] }), _jsxs("div", { className: "sk-menu-lang", role: "group", "aria-label": t("menu.language"), children: [_jsx(Languages, { size: 16 }), _jsx("span", { children: t("menu.language") }), _jsx("div", { className: "sk-seg", children: ["tr", "en"].map((l) => (_jsx("button", { type: "button", "aria-pressed": lang === l, onClick: () => changeLang(l), children: l.toUpperCase() }, l))) })] }), _jsxs("div", { className: "sk-menu-section", children: [_jsx("span", { children: t("menu.canvas") }), _jsx("div", { className: "sk-menu-swatches", children: CANVAS_COLORS.map((c) => (_jsx("button", { type: "button", className: "sk-swatch", style: { background: c }, "aria-pressed": state.background === c, "aria-label": `${t("menu.canvasColor")} ${c}`, onClick: () => editor.setBackground(c) }, c))) })] }), _jsx("hr", {}), _jsxs("button", { type: "button", role: "menuitem", onClick: closeMenuThen(() => setDialog("help")), children: [_jsx(CircleHelp, { size: 16 }), " ", t("menu.shortcuts"), " ", _jsx("kbd", { children: "?" })] }), docsUrl && (_jsxs("a", { role: "menuitem", href: docsUrl, target: "_blank", rel: "noopener", children: [_jsx(BookOpen, { size: 16 }), " ", t("menu.docs")] })), about && (_jsxs("button", { type: "button", role: "menuitem", onClick: closeMenuThen(() => setDialog("about")), children: [_jsx(Info, { size: 16 }), " ", t("menu.about")] })), links.length > 0 && _jsx("hr", {}), links.map((l) => (_jsxs("a", { role: "menuitem", href: l.href, target: l.href.startsWith("http") ? "_blank" : undefined, rel: "noopener", children: [l.icon, " ", l.label] }, l.href)))] }))] }), readOnly ? (_jsxs("div", { className: "sk-viewbar sk-glass", role: "status", children: [_jsxs("span", { className: "sk-viewbar-label", children: [_jsx(Eye, { size: 15 }), " ", t("view.banner")] }), _jsx("button", { type: "button", className: "sk-btn is-primary", onClick: () => closeShared(true), children: t("view.add") }), _jsx("button", { type: "button", className: "sk-btn", onClick: () => closeShared(false), children: t("view.close") })] })) : (_jsx(Toolbar, { editor: editor })), _jsxs("div", { className: "sk-top-right", children: [_jsx("button", { type: "button", className: "sk-icon-btn sk-glass", "aria-label": t("menu.layers"), "aria-pressed": layersOpen, title: `${t("menu.layers")} (⌥L)`, onClick: () => setLayersOpen((v) => !v), children: _jsx(Layers, { size: 17 }) }), _jsx("button", { type: "button", className: "sk-icon-btn sk-glass", "aria-label": t("top.export"), title: `${t("top.export")} (⌘⇧E)`, onClick: () => setDialog("export"), children: _jsx(ImageDown, { size: 17 }) }), _jsxs("button", { type: "button", className: "sk-btn is-primary", onClick: () => setDialog("share"), children: [_jsx(Share2, { size: 15 }), " ", _jsx("span", { className: "sk-hide-sm", children: t("menu.share") })] })] })] }), hasPanel && !readOnly && (_jsxs(_Fragment, { children: [_jsx("button", { type: "button", className: "sk-panel-toggle sk-icon-btn sk-glass", "aria-label": t("top.styles"), "aria-expanded": panelOpen, onClick: () => setPanelOpen((v) => !v), children: _jsx(SlidersHorizontal, { size: 17 }) }), _jsx("div", { className: `sk-panel-wrap${panelOpen ? " is-open" : ""}`, children: _jsx(StylePanel, { editor: editor }) })] })), layersOpen && !readOnly && (_jsx("div", { className: "sk-layers-wrap", children: _jsx(LayersPanel, { editor: editor, onClose: () => setLayersOpen(false) }) })), _jsxs("div", { className: "sk-bottom-left", children: [_jsxs("div", { className: "sk-group sk-glass", children: [_jsx("button", { type: "button", className: "sk-icon-btn", "aria-label": t("zoom.out"), onClick: () => editor.zoomBy(1 / 1.2), children: _jsx(Minus, { size: 16 }) }), _jsxs("button", { type: "button", className: "sk-zoom", title: t("zoom.reset"), onClick: () => editor.resetZoom(), children: [Math.round(state.view.zoom * 100), "%"] }), _jsx("button", { type: "button", className: "sk-icon-btn", "aria-label": t("zoom.in"), onClick: () => editor.zoomBy(1.2), children: _jsx(Plus, { size: 16 }) })] }), _jsxs("div", { className: "sk-group sk-glass", children: [_jsx("button", { type: "button", className: "sk-icon-btn", "aria-label": t("history.undo"), disabled: !editor.canUndo, onClick: () => editor.undo(), children: _jsx(Undo2, { size: 16 }) }), _jsx("button", { type: "button", className: "sk-icon-btn", "aria-label": t("history.redo"), disabled: !editor.canRedo, onClick: () => editor.redo(), children: _jsx(Redo2, { size: 16 }) })] })] }), _jsx("div", { className: "sk-bottom-right", children: _jsx("button", { type: "button", className: "sk-icon-btn sk-glass", "aria-label": t("menu.shortcuts"), onClick: () => setDialog("help"), children: _jsx(CircleHelp, { size: 17 }) }) }), empty && (_jsxs("div", { className: "sk-welcome", children: [brand ?? _jsx(Wordmark, {}), _jsx("p", { children: t("welcome.text") }), _jsxs("div", { className: "sk-welcome-actions", children: [_jsxs("button", { type: "button", className: "sk-btn", onClick: () => fileInput.current?.click(), children: [_jsx(FolderOpen, { size: 15 }), " ", t("welcome.open")] }), _jsxs("button", { type: "button", className: "sk-btn", onClick: () => setDialog("help"), children: [_jsx(CircleHelp, { size: 15 }), " ", t("welcome.shortcuts")] }), docsUrl && (_jsxs("a", { className: "sk-btn", href: docsUrl, target: "_blank", rel: "noopener", children: [_jsx(BookOpen, { size: 15 }), " ", t("welcome.docs")] }))] }), _jsx("p", { className: "sk-welcome-hint", children: t("welcome.hint") })] })), _jsx("input", { ref: fileInput, type: "file", accept: ".biyikdraw,.json,application/json,image/*", hidden: true, onChange: (e) => {
                         const file = e.target.files?.[0];
                         if (file)
                             handleFile(file, null);
@@ -295,5 +368,5 @@ export default function DrawApp({ handFont = "'Caveat', 'Comic Sans MS', cursive
                         if (file)
                             void editor.insertImageFile(file, imageAt.current);
                         e.target.value = "";
-                    } }), dialog === "export" && (_jsx(ExportDialog, { editor: editor, onClose: () => setDialog(null) })), dialog === "help" && _jsx(HelpDialog, { onClose: () => setDialog(null) }), dialog === "about" && about && (_jsx(AboutDialog, { info: about, docsUrl: docsUrl, onClose: () => setDialog(null) })), dialog === "clear" && (_jsx(ConfirmDialog, { title: t("menu.clear"), message: t("clear.message"), confirmLabel: t("clear.confirm"), onConfirm: () => editor.clear(), onClose: () => setDialog(null) }))] }) }));
+                    } }), dialog === "export" && (_jsx(ExportDialog, { editor: editor, onClose: () => setDialog(null) })), dialog === "help" && _jsx(HelpDialog, { onClose: () => setDialog(null) }), dialog === "share" && (_jsx(ShareDialog, { editor: editor, onClose: () => setDialog(null) })), dialog === "about" && about && (_jsx(AboutDialog, { info: about, docsUrl: docsUrl, onClose: () => setDialog(null) })), dialog === "clear" && (_jsx(ConfirmDialog, { title: t("menu.clear"), message: t("clear.message"), confirmLabel: t("clear.confirm"), onConfirm: () => editor.clear(), onClose: () => setDialog(null) }))] }) }));
 }

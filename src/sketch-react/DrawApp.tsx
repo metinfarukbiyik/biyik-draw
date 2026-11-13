@@ -28,6 +28,7 @@ import {
   Sun,
   Trash2,
   Undo2,
+  Eye,
 } from "lucide-react";
 import {
   CANVAS_COLORS,
@@ -49,8 +50,11 @@ import {
   ConfirmDialog,
   ExportDialog,
   HelpDialog,
+  ShareDialog,
   type AboutInfo,
 } from "./Dialogs";
+import { decodeShare, hasShare, type SharePayload } from "./share";
+import { sceneFromHtml } from "./offline";
 import { getItem, setItem } from "./storage";
 import { useEditor } from "./useEditor";
 import { browserLang, I18nContext, makeT, type Lang } from "./i18n";
@@ -173,8 +177,16 @@ export default function DrawApp({
   const [menuOpen, setMenuOpen] = useState(false);
   const [layersOpen, setLayersOpen] = useState(false);
   const [dialog, setDialog] = useState<
-    "export" | "help" | "clear" | "about" | null
+    "export" | "help" | "clear" | "about" | "share" | null
   >(null);
+  /** Paylaşılan çizim açıkken kullanıcının kendi tahtası burada bekler. */
+  const ownBoard = useRef<{
+    elements: SketchElement[];
+    files: Record<string, string>;
+    view: View;
+    background: string;
+  } | null>(null);
+  const [shared, setShared] = useState<SharePayload | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
@@ -187,6 +199,64 @@ export default function DrawApp({
 
   const sceneKey = `${storageKey}-scene`;
   const prefsKey = `${storageKey}-prefs`;
+
+  /* ── Paylaşılan çizim ── */
+  async function openShared(hash: string) {
+    const payload = await decodeShare(hash);
+    if (!payload) {
+      window.alert(t("view.invalid"));
+      history.replaceState(null, "", location.pathname + location.search);
+      return;
+    }
+    if (!editor.state.readOnly) {
+      ownBoard.current = {
+        elements: editor.elements,
+        files: editor.files,
+        view: editor.state.view,
+        background: editor.state.background,
+      };
+    }
+    editor.load(payload, { resetHistory: true });
+    editor.state = {
+      ...editor.state,
+      background: payload.background ?? editor.state.background,
+    };
+    editor.setReadOnly(true);
+    setShared(payload);
+    editor.zoomToFit();
+  }
+
+  const closeShared = (addToBoard: boolean) => {
+    const own = ownBoard.current;
+    history.replaceState(null, "", location.pathname + location.search);
+    editor.load(
+      { elements: own?.elements ?? [], files: own?.files ?? {} },
+      { resetHistory: true },
+    );
+    editor.state = {
+      ...editor.state,
+      view: own?.view ?? editor.state.view,
+      background: own?.background ?? editor.state.background,
+    };
+    editor.setReadOnly(false);
+    if (addToBoard && shared) {
+      editor.pasteElements(shared.elements, shared.files, { beside: true });
+      editor.zoomToFit(true);
+    }
+    ownBoard.current = null;
+    setShared(null);
+  };
+
+  // Uygulama açıkken adres çubuğuna yeni bir paylaşım bağlantısı yapıştırılırsa
+  useEffect(() => {
+    if (!ready) return;
+    const onHash = () => {
+      if (hasShare(location.hash)) void openShared(location.hash);
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready]);
 
   /* ── Yazı tipleri ve kayıtlı sahne ── */
   useEffect(() => {
@@ -219,6 +289,8 @@ export default function DrawApp({
       };
       if (scene?.elements?.length) editor.load(scene, { resetHistory: true });
       else editor.remeasureText();
+      if (hasShare(location.hash)) await openShared(location.hash);
+      if (cancelled) return;
       setReady(true);
       // Yazı tipleri yüklenince metin ölçüleri değişir
       await Promise.all(
@@ -243,6 +315,8 @@ export default function DrawApp({
     let lastScene = editor.sceneVersion;
     let lastTheme = editor.state.theme;
     const saveScene = () => {
+      // Paylaşılan çizim görüntülenirken kendi kaydının üzerine yazma
+      if (editor.state.readOnly) return;
       const used = new Set(
         editor.elements.flatMap((el) => (el.fileId ? [el.fileId] : [])),
       );
@@ -251,6 +325,7 @@ export default function DrawApp({
       void setItem(sceneKey, { elements: editor.elements, files });
     };
     const savePrefs = () => {
+      if (editor.state.readOnly) return;
       const { background, grid, view, style, toolLocked } = editor.state;
       void setItem(prefsKey, {
         background,
@@ -302,7 +377,11 @@ export default function DrawApp({
   const loadFile = useCallback(
     async (file: File) => {
       try {
-        const data = JSON.parse(await file.text());
+        const text = await file.text();
+        // Çevrimdışı HTML paylaşım dosyası da açılabilir
+        const data = text.trimStart().startsWith("<")
+          ? sceneFromHtml(text)
+          : JSON.parse(text);
         if (!isSceneFile(data)) throw new Error("format");
         editor.load(data);
         if (data.background) editor.setBackground(data.background);
@@ -418,7 +497,9 @@ export default function DrawApp({
     return () => window.removeEventListener("pointerdown", onDown);
   }, [menuOpen]);
 
-  const empty = ready && editor.elements.length === 0 && !state.editingId;
+  const empty =
+    ready && editor.elements.length === 0 && !state.editingId && !shared;
+  const readOnly = state.readOnly;
   const hasPanel =
     editor.selectedElements().length > 0 ||
     !!state.editingId ||
@@ -454,10 +535,19 @@ export default function DrawApp({
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={closeMenuThen(() => fileInput.current?.click())}
+                  onClick={closeMenuThen(() => setDialog("share"))}
                 >
-                  <FolderOpen size={16} /> {t("menu.open")} <kbd>⌘O</kbd>
+                  <Share2 size={16} /> {t("menu.share")}
                 </button>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={closeMenuThen(() => fileInput.current?.click())}
+                  >
+                    <FolderOpen size={16} /> {t("menu.open")} <kbd>⌘O</kbd>
+                  </button>
+                )}
                 <button
                   type="button"
                   role="menuitem"
@@ -472,13 +562,15 @@ export default function DrawApp({
                 >
                   <ImageDown size={16} /> {t("menu.export")} <kbd>⌘⇧E</kbd>
                 </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={closeMenuThen(() => setDialog("clear"))}
-                >
-                  <Trash2 size={16} /> {t("menu.clear")}
-                </button>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={closeMenuThen(() => setDialog("clear"))}
+                  >
+                    <Trash2 size={16} /> {t("menu.clear")}
+                  </button>
+                )}
                 <hr />
                 <button
                   type="button"
@@ -590,7 +682,29 @@ export default function DrawApp({
             )}
           </div>
 
-          <Toolbar editor={editor} />
+          {readOnly ? (
+            <div className="sk-viewbar sk-glass" role="status">
+              <span className="sk-viewbar-label">
+                <Eye size={15} /> {t("view.banner")}
+              </span>
+              <button
+                type="button"
+                className="sk-btn is-primary"
+                onClick={() => closeShared(true)}
+              >
+                {t("view.add")}
+              </button>
+              <button
+                type="button"
+                className="sk-btn"
+                onClick={() => closeShared(false)}
+              >
+                {t("view.close")}
+              </button>
+            </div>
+          ) : (
+            <Toolbar editor={editor} />
+          )}
 
           <div className="sk-top-right">
             <button
@@ -605,16 +719,25 @@ export default function DrawApp({
             </button>
             <button
               type="button"
-              className="sk-btn is-primary"
+              className="sk-icon-btn sk-glass"
+              aria-label={t("top.export")}
+              title={`${t("top.export")} (⌘⇧E)`}
               onClick={() => setDialog("export")}
             >
+              <ImageDown size={17} />
+            </button>
+            <button
+              type="button"
+              className="sk-btn is-primary"
+              onClick={() => setDialog("share")}
+            >
               <Share2 size={15} />{" "}
-              <span className="sk-hide-sm">{t("top.export")}</span>
+              <span className="sk-hide-sm">{t("menu.share")}</span>
             </button>
           </div>
         </div>
 
-        {hasPanel && (
+        {hasPanel && !readOnly && (
           <>
             <button
               type="button"
@@ -631,7 +754,7 @@ export default function DrawApp({
           </>
         )}
 
-        {layersOpen && (
+        {layersOpen && !readOnly && (
           <div className="sk-layers-wrap">
             <LayersPanel editor={editor} onClose={() => setLayersOpen(false)} />
           </div>
@@ -758,6 +881,9 @@ export default function DrawApp({
           <ExportDialog editor={editor} onClose={() => setDialog(null)} />
         )}
         {dialog === "help" && <HelpDialog onClose={() => setDialog(null)} />}
+        {dialog === "share" && (
+          <ShareDialog editor={editor} onClose={() => setDialog(null)} />
+        )}
         {dialog === "about" && about && (
           <AboutDialog
             info={about}

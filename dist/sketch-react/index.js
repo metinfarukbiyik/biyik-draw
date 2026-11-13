@@ -8,3 +8,5 @@
  */
 export { default as Draw, Wordmark } from './DrawApp.js';
 export { messages, browserLang } from './i18n.js';
+export { encodeShare, decodeShare, hasShare, shareUrl } from './share.js';
+export { buildOfflineHtml, inlineFontCss, sceneFromHtml } from './offline.js';

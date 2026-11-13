@@ -9,3 +9,5 @@
 export { default as Draw, Wordmark, type DrawProps, type DrawLink } from './DrawApp';
 export type { AboutInfo } from './Dialogs';
 export { messages, browserLang, type Lang, type MessageKey } from './i18n';
+export { encodeShare, decodeShare, hasShare, shareUrl, type SharePayload } from './share';
+export { buildOfflineHtml, inlineFontCss, sceneFromHtml } from './offline';

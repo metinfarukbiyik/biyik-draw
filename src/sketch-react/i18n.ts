@@ -186,6 +186,28 @@ const tr = {
   'about.openSource': 'açık kaynak',
   'about.privacy': 'Gizlilik',
   'about.privacyText': 'Çizimler yalnızca tarayıcında saklanır, sunucuya gönderilmez.',
+
+  // Paylaşma
+  'menu.share': 'Paylaş',
+  'share.title': 'Çizimi paylaş',
+  'share.lead': 'Bağlantı çizimin kendisini içerir; hiçbir sunucuya yüklenmez. Bağlantıyı açan kişi çizimi görür ve isterse kendi tahtasına ekler.',
+  'share.link': 'Paylaşım bağlantısı',
+  'share.copy': 'Kopyala',
+  'share.copied': 'Kopyalandı',
+  'share.native': 'Gönder…',
+  'share.size': 'Bağlantı boyutu',
+  'share.long': 'Bağlantı çok uzun (büyük ihtimalle görseller yüzünden). Bazı uygulamalar kısaltabilir; çevrimdışı dosyayı göndermek daha güvenli.',
+  'share.preparing': 'Bağlantı hazırlanıyor…',
+  'share.empty': 'Paylaşılacak bir şey yok. Önce bir şeyler çiz.',
+  'share.offline': 'Çevrimdışı paylaş',
+  'share.offlineLead': 'İnternet olmadan her tarayıcıda açılan tek bir HTML dosyası. E-posta, mesaj ya da USB ile gönderebilirsin; dosya menüdeki “Aç” ile yeniden düzenlenebilir.',
+  'share.html': 'HTML dosyası',
+  'share.file': '.biyikdraw dosyası',
+  'share.editIn': 'Bu çizimi düzenle',
+  'view.banner': 'Paylaşılan çizim · salt okunur',
+  'view.add': 'Tahtama ekle',
+  'view.close': 'Kendi tahtama dön',
+  'view.invalid': 'Paylaşım bağlantısı açılamadı.',
 };
 
 export type MessageKey = keyof typeof tr;
@@ -367,6 +389,27 @@ const en: Record<MessageKey, string> = {
   'about.openSource': 'open source',
   'about.privacy': 'Privacy',
   'about.privacyText': 'Drawings are stored only in your browser and never sent to a server.',
+
+  'menu.share': 'Share',
+  'share.title': 'Share drawing',
+  'share.lead': 'The link contains the drawing itself; nothing is uploaded to a server. Whoever opens it sees the drawing and can add it to their own board.',
+  'share.link': 'Share link',
+  'share.copy': 'Copy',
+  'share.copied': 'Copied',
+  'share.native': 'Send…',
+  'share.size': 'Link size',
+  'share.long': 'The link is very long (probably because of images). Some apps may cut it; sending the offline file is safer.',
+  'share.preparing': 'Preparing link…',
+  'share.empty': 'Nothing to share yet. Draw something first.',
+  'share.offline': 'Share offline',
+  'share.offlineLead': 'A single HTML file that opens in any browser without internet. Send it by email, chat or USB; reopen it for editing with “Open” in the menu.',
+  'share.html': 'HTML file',
+  'share.file': '.biyikdraw file',
+  'share.editIn': 'Edit this drawing',
+  'view.banner': 'Shared drawing · read-only',
+  'view.add': 'Add to my board',
+  'view.close': 'Back to my board',
+  'view.invalid': 'This share link could not be opened.',
 };
 
 export const messages: Record<Lang, Record<MessageKey, string>> = { tr, en };
