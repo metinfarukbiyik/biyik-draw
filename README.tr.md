@@ -76,6 +76,7 @@ const Tahta = dynamic(() => import('./Tahta'), { ssr: false });
 | `links` | `{ label, href, icon? }[]` | Menünün altındaki ek bağlantılar. |
 | `docsUrl` | `string` | Menüde Dokümantasyon bağlantısı gösterir. |
 | `about` | `AboutInfo` | Menüde Hakkında penceresi gösterir. |
+| `onEvent` | `(name, params?) => void` | Analytics için kullanım olayları: `share_open`, `export_open`, `teaching_mode`, `shared_view`, `shared_added`, `file_save`… |
 
 ### Görünümü özelleştirme
 

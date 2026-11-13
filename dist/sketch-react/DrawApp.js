@@ -32,7 +32,7 @@ const systemTheme = () => typeof matchMedia !== "undefined" &&
     matchMedia("(prefers-color-scheme: dark)").matches
     ? "dark"
     : "light";
-export default function DrawApp({ handFont = "'Caveat', 'Comic Sans MS', cursive", storageKey = "sketch", initialTheme, onThemeChange, brand, links = [], docsUrl, about, lang: langProp, onLangChange, }) {
+export default function DrawApp({ handFont = "'Caveat', 'Comic Sans MS', cursive", storageKey = "sketch", initialTheme, onThemeChange, brand, links = [], docsUrl, about, lang: langProp, onLangChange, onEvent, }) {
     const [langState, setLangState] = useState(() => langProp ?? browserLang());
     const lang = langProp ?? langState;
     const t = makeT(lang);
@@ -64,9 +64,12 @@ export default function DrawApp({ handFont = "'Caveat', 'Comic Sans MS', cursive
     const imageAt = useRef(null);
     const menuRef = useRef(null);
     const themeCallback = useRef(onThemeChange);
+    const eventCallback = useRef(onEvent);
     useEffect(() => {
         themeCallback.current = onThemeChange;
+        eventCallback.current = onEvent;
     });
+    const emitEvent = (name, params) => eventCallback.current?.(name, params);
     const sceneKey = `${storageKey}-scene`;
     const prefsKey = `${storageKey}-prefs`;
     /* ── Paylaşılan çizim ── */
@@ -94,6 +97,7 @@ export default function DrawApp({ handFont = "'Caveat', 'Comic Sans MS', cursive
         };
         editor.setReadOnly(true);
         setShared(payload);
+        emitEvent("shared_view", { elements: payload.elements.length });
         editor.zoomToFit();
     }
     const closeShared = (addToBoard) => {
@@ -107,6 +111,7 @@ export default function DrawApp({ handFont = "'Caveat', 'Comic Sans MS', cursive
             paper: own?.paper ?? editor.state.paper,
         };
         editor.setReadOnly(false);
+        emitEvent(addToBoard ? "shared_added" : "shared_closed");
         if (addToBoard && shared) {
             editor.pasteElements(shared.elements, shared.files, { beside: true });
             editor.zoomToFit(true);
@@ -244,6 +249,7 @@ export default function DrawApp({ handFont = "'Caveat', 'Comic Sans MS', cursive
         const a = document.createElement("a");
         a.href = url;
         a.download = `${t("file.name")}.biyikdraw`;
+        eventCallback.current?.("file_save");
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
     }, [editor, t]);
@@ -284,6 +290,7 @@ export default function DrawApp({ handFont = "'Caveat', 'Comic Sans MS', cursive
         setMenuOpen(false);
         setLayersOpen(false);
         setPresenting(true);
+        eventCallback.current?.("teaching_mode");
         if (!["freedraw", "highlighter", "laser"].includes(editor.state.tool))
             editor.setTool("freedraw");
         document.documentElement.requestFullscreen?.().catch(() => undefined);
@@ -302,6 +309,11 @@ export default function DrawApp({ handFont = "'Caveat', 'Comic Sans MS', cursive
         document.addEventListener("fullscreenchange", onFs);
         return () => document.removeEventListener("fullscreenchange", onFs);
     }, []);
+    // Pencere açılışları (paylaş, dışa aktar, kısayollar, hakkında)
+    useEffect(() => {
+        if (dialog && dialog !== "clear")
+            eventCallback.current?.(`${dialog}_open`);
+    }, [dialog]);
     /* ── Pano işlemleri (sağ tık menüsü ve kısayollar) ── */
     const notify = useCallback((ok, okKey = "toast.copied") => showToast(t(ok ? okKey : "toast.copyFailed")), [showToast, t]);
     const ctxActions = {

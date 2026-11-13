@@ -99,6 +99,11 @@ export interface DrawProps {
   lang?: Lang;
   /** Menüden dil değiştirildiğinde çağrılır. */
   onLangChange?: (lang: Lang) => void;
+  /**
+   * Kullanım olayları (ör. analytics): share_open, export_open, help_open, about_open,
+   * teaching_mode, shared_view, shared_added, file_save.
+   */
+  onEvent?: (name: string, params?: Record<string, unknown>) => void;
 }
 
 const isField = (t: EventTarget | null) =>
@@ -177,6 +182,7 @@ export default function DrawApp({
   about,
   lang: langProp,
   onLangChange,
+  onEvent,
 }: DrawProps) {
   const [langState, setLangState] = useState<Lang>(
     () => langProp ?? browserLang(),
@@ -219,9 +225,13 @@ export default function DrawApp({
   const imageAt = useRef<[number, number] | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const themeCallback = useRef(onThemeChange);
+  const eventCallback = useRef(onEvent);
   useEffect(() => {
     themeCallback.current = onThemeChange;
+    eventCallback.current = onEvent;
   });
+  const emitEvent = (name: string, params?: Record<string, unknown>) =>
+    eventCallback.current?.(name, params);
 
   const sceneKey = `${storageKey}-scene`;
   const prefsKey = `${storageKey}-prefs`;
@@ -251,6 +261,7 @@ export default function DrawApp({
     };
     editor.setReadOnly(true);
     setShared(payload);
+    emitEvent("shared_view", { elements: payload.elements.length });
     editor.zoomToFit();
   }
 
@@ -268,6 +279,7 @@ export default function DrawApp({
       paper: own?.paper ?? editor.state.paper,
     };
     editor.setReadOnly(false);
+    emitEvent(addToBoard ? "shared_added" : "shared_closed");
     if (addToBoard && shared) {
       editor.pasteElements(shared.elements, shared.files, { beside: true });
       editor.zoomToFit(true);
@@ -414,6 +426,7 @@ export default function DrawApp({
     const a = document.createElement("a");
     a.href = url;
     a.download = `${t("file.name")}.biyikdraw`;
+    eventCallback.current?.("file_save");
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }, [editor, t]);
@@ -458,6 +471,7 @@ export default function DrawApp({
     setMenuOpen(false);
     setLayersOpen(false);
     setPresenting(true);
+    eventCallback.current?.("teaching_mode");
     if (!["freedraw", "highlighter", "laser"].includes(editor.state.tool))
       editor.setTool("freedraw");
     document.documentElement.requestFullscreen?.().catch(() => undefined);
@@ -474,6 +488,11 @@ export default function DrawApp({
     document.addEventListener("fullscreenchange", onFs);
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
+
+  // Pencere açılışları (paylaş, dışa aktar, kısayollar, hakkında)
+  useEffect(() => {
+    if (dialog && dialog !== "clear") eventCallback.current?.(`${dialog}_open`);
+  }, [dialog]);
 
   /* ── Pano işlemleri (sağ tık menüsü ve kısayollar) ── */
   const notify = useCallback(

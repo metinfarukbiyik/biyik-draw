@@ -76,6 +76,7 @@ const Whiteboard = dynamic(() => import('./Whiteboard'), { ssr: false });
 | `links` | `{ label, href, icon? }[]` | Extra links at the bottom of the menu. |
 | `docsUrl` | `string` | Shows a Documentation link in the menu. |
 | `about` | `AboutInfo` | Shows an About dialog in the menu. |
+| `onEvent` | `(name, params?) => void` | Usage events for analytics: `share_open`, `export_open`, `teaching_mode`, `shared_view`, `shared_added`, `file_save`… |
 
 ### Theming
 

@@ -28,9 +28,14 @@ export interface DrawProps {
     lang?: Lang;
     /** Menüden dil değiştirildiğinde çağrılır. */
     onLangChange?: (lang: Lang) => void;
+    /**
+     * Kullanım olayları (ör. analytics): share_open, export_open, help_open, about_open,
+     * teaching_mode, shared_view, shared_added, file_save.
+     */
+    onEvent?: (name: string, params?: Record<string, unknown>) => void;
 }
 export declare function Wordmark({ name, suffix, }: {
     name?: string;
     suffix?: string;
 }): import("react").JSX.Element;
-export default function DrawApp({ handFont, storageKey, initialTheme, onThemeChange, brand, links, docsUrl, about, lang: langProp, onLangChange, }: DrawProps): import("react").JSX.Element;
+export default function DrawApp({ handFont, storageKey, initialTheme, onThemeChange, brand, links, docsUrl, about, lang: langProp, onLangChange, onEvent, }: DrawProps): import("react").JSX.Element;
